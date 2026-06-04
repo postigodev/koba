@@ -1,61 +1,122 @@
 # Koba
 
-Koba is a local-first Git workflow configurator.
+**Local-first Git workflow configuration for real repositories.**
 
-Think `tweakcn` for Git workflows: instead of configuring UI themes, Koba scans and configures repository workflow infrastructure such as commit conventions, hooks, pre-commit and pre-push checks, pull request templates, `.github/` files, and repo hygiene.
+Koba makes repository workflows explicit: commit conventions, hooks, smoke checks, PR templates, `.github/` infrastructure, branch rules, and repo hygiene.
 
-Koba is starting small. The first milestone is a serious project foundation for a CLI-first Rust tool, not a finished workflow engine.
+Think of it like a workflow configurator for Git repos. Instead of manually spreading rules across README files, package scripts, Husky hooks, CI YAML, PR templates, and team habits, Koba gives the repo a visible workflow contract.
+
+## Why
+
+Git is powerful, but real Git workflows usually live across scattered places:
+
+* `package.json` scripts
+* `.husky/`
+* `.git/hooks/`
+* `.github/workflows/`
+* `.github/pull_request_template.md`
+* branch naming conventions
+* commit message conventions
+* contributor habits
+* maintainer expectations
+* AI agent instructions
+
+Koba turns those informal rules into something inspectable and reproducible.
 
 ## Philosophy
 
-- Make Git workflows explicit, inspectable, and reproducible.
-- Integrate with Git, Husky, GitHub Actions, GitHub CLI, and existing project tools instead of replacing them.
-- Default to recommend-only behavior.
-- Never mutate history or commit changes without explicit user approval.
-- Prefer safe, scoped commands that are useful to humans and AI coding agents.
-- Keep AI optional. Koba should be valuable as a normal local CLI.
+Koba does not replace Git.
+
+Koba does not replace Husky.
+
+Koba does not replace GitHub Actions.
+
+Koba does not commit for you by default.
+
+Koba is a local workflow layer that helps developers and coding agents understand what should happen before commits, pushes, and pull requests.
+
+Default behavior should be safe, explicit, and recommend-first.
 
 ## Planned Commands
 
-```text
+```bash
 koba init
 koba scan
 koba doctor
-koba run
-koba hooks
+koba run pre-commit
+koba run pre-push
+koba hooks install
 koba suggest-commit
 koba pr
 ```
 
-- `init`: create or update a repository-local `koba.yml`.
-- `scan`: inspect workflow infrastructure and report what exists.
-- `doctor`: diagnose missing, conflicting, or risky workflow setup.
-- `run`: execute named checks from `koba.yml`.
-- `hooks`: inspect and eventually install or sync Git hook configuration.
-- `suggest-commit`: suggest a safe commit command from staged changes.
-- `pr`: inspect or prepare pull request workflow assets.
+## Example Config
 
-## Non-Goals
+```yaml
+project:
+  name: koba
+  profile: rust-cli
 
-- Koba is not a replacement for Git.
-- Koba is not a replacement for Husky, pre-commit, GitHub Actions, or GitHub CLI.
-- Koba will not mutate Git history.
-- Koba will not auto-commit or push changes.
-- Koba will not require AI services for core workflows.
+commit:
+  convention: conventional
+  requireScope: true
+  allowedTypes:
+    - feat
+    - fix
+    - docs
+    - chore
+    - refactor
+    - test
 
-## Early Roadmap
+hooks:
+  adapter: native
+  mode: recommend
 
-1. Establish the CLI surface and repository documentation.
-2. Add read-only repository scanning for Git metadata and workflow files.
-3. Define the first `koba.yml` schema for checks, hooks, and conventions.
-4. Implement `doctor` diagnostics with recommend-only output.
-5. Add explicit apply flows for safe file generation.
-6. Explore optional AI-assisted layers after the local workflow model is useful on its own.
+checks:
+  preCommit:
+    - name: format
+      run: cargo fmt --check
+    - name: test
+      run: cargo test
 
-## Development
+  prePush:
+    - name: clippy
+      run: cargo clippy -- -D warnings
 
-Run the scoped checks for the current foundation:
-
-```sh
-cargo test -p koba
+github:
+  discover: true
+  prTemplate:
+    sections:
+      - summary
+      - changes
+      - checks
+      - risk
+      - reviewer-notes
 ```
+
+## MVP
+
+The first version of Koba focuses on:
+
+* Rust CLI foundation
+* repository scanning
+* `.github/` discovery
+* `koba.yml` workflow config
+* native Git hook adapter
+* Husky adapter
+* scoped check execution
+* Conventional Commit suggestions
+* PR template generation
+
+## Non-goals
+
+* Replacing Git
+* Replacing CI
+* Storing GitHub credentials
+* Auto-committing changes
+* Hiding dangerous mutations behind magic automation
+* Depending on AI for core behavior
+
+## Status
+
+Early development.

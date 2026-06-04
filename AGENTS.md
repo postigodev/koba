@@ -1,35 +1,170 @@
 # AGENTS.md
 
-Guidance for AI coding agents working in this repository.
+## Project
 
-## Project Intent
+Koba is a local-first Git workflow configurator.
 
-Koba is a local-first Rust CLI for making Git workflow infrastructure explicit, inspectable, and reproducible. It should integrate with existing tools rather than replace them.
+It helps repositories make their development workflow explicit, inspectable, and reproducible: commit conventions, hooks, smoke checks, PR templates, `.github/` infrastructure, branch rules, and repo hygiene.
 
-## Working Rules
+Koba is not a Git replacement. It is a workflow layer around Git and existing tools such as Husky, GitHub Actions, GitHub CLI, and native Git hooks.
 
-- Inspect the repository state before editing.
-- Keep changes scoped to the requested task.
-- Do not commit, push, rewrite history, or stage changes unless explicitly asked.
-- Default product behavior to recommend-only. File mutations must be explicit and reviewable.
-- Prefer small, testable modules over dumping logic into `main.rs`.
-- Use real Git commands through a narrow wrapper when Git integration is added; do not introduce `git2` until there is a clear reason.
-- Keep dependencies minimal and justify new ones.
-- Run only scoped, relevant checks after changes.
+## Working Principles
 
-## Rust Conventions
+* Prefer small, coherent changes over broad rewrites.
+* Preserve user intent, but challenge weak assumptions when there is a better technical path.
+* Be creative in design, but conservative in repository mutation.
+* Do not invent product scope silently. If a change expands scope, say so.
+* Do not hide tradeoffs. Explain them briefly when they matter.
+* Optimize for a serious devtool: predictable behavior, inspectable config, clear errors, and safe defaults.
 
-- CLI parsing belongs near the command surface.
-- Command execution should live behind modules that are easy to test.
-- Prefer clear error messages over clever abstractions.
-- Add integration tests for user-visible CLI behavior.
+## Agent Autonomy
 
-## Documentation Expectations
+Agents may:
 
-- Update `README.md` when user-facing commands or philosophy change.
-- Update `docs/product.md` for product model or MVP boundary changes.
-- Update `docs/architecture.md` for crate structure and design decisions.
+* Propose architecture improvements.
+* Push back on bad abstractions or premature complexity.
+* Suggest simpler implementations.
+* Create small supporting docs when they clarify the implementation.
+* Refactor touched code when it directly supports the requested change.
 
-## Safety Notes
+Agents must not:
 
-Koba must never mutate Git history or commit repository changes on behalf of the user. Any future command that writes files should explain what it will change and require explicit approval or an explicit apply flag.
+* Commit changes unless explicitly asked.
+* Rewrite history, rebase, squash, or force-push.
+* Install unrelated dependencies.
+* Make large unrelated formatting changes.
+* Replace working implementation with speculative architecture.
+* Add AI-dependent behavior as a core requirement.
+* Store credentials, GitHub tokens, or secrets.
+
+## Tooling Expectations
+
+Use fast local inspection first.
+
+Preferred inspection commands:
+
+* `rg` for searching text.
+* `fd` or `find` for locating files.
+* `git status --short` before and after edits.
+* `git diff --stat` and targeted `git diff` before summarizing changes.
+
+Use Context7 or equivalent documentation lookup when:
+
+* Working with unfamiliar library APIs.
+* Updating code that depends on current framework behavior.
+* Unsure about current best practices for a dependency.
+
+Use brainstorming/planning skills when:
+
+* Designing new commands or config shape.
+* Comparing architecture options.
+* Deciding whether a feature belongs in Koba core, an adapter, or later roadmap.
+
+## Token Efficiency
+
+* Inspect only files relevant to the requested task.
+* Prefer `rg` over opening whole directories.
+* Read narrow file ranges when possible.
+* Do not paste large unchanged files into responses.
+* Summarize command output instead of dumping it unless the exact output matters.
+* Avoid re-reading files already inspected unless they changed.
+
+## Testing Policy
+
+Run scoped checks first.
+
+Examples:
+
+* For CLI argument changes, run the CLI tests or the smallest relevant test target.
+* For Rust formatting changes, run `cargo fmt --check`.
+* For Rust compile-level changes, run `cargo check`.
+* For behavior changes, run the relevant tests before broad test suites.
+* Run full test suites only when the change is cross-cutting or before suggesting a release/merge.
+
+Do not claim tests passed unless they were actually run.
+
+When reporting, include:
+
+* Commands run.
+* Whether each command passed or failed.
+* Any failures and whether they are related to the change.
+
+## Git and Repository Safety
+
+Before editing:
+
+```bash
+git status --short
+```
+
+After editing:
+
+```bash
+git status --short
+git diff --stat
+```
+
+Never commit by default.
+
+If a commit is appropriate, suggest the exact command using Conventional Commits:
+
+```bash
+git add <files>
+git commit -m "feat(scope): description"
+```
+
+Prefer surgical commits:
+
+* one concept per commit
+* scoped files
+* clear Conventional Commit message
+* no bundled unrelated cleanup
+
+## Product Boundaries
+
+Koba should default to recommend-only behavior.
+
+Dangerous or mutating actions should require explicit flags or confirmation, especially:
+
+* installing hooks
+* overwriting `.github/` files
+* modifying Husky files
+* changing branch rules
+* opening PRs
+* running commands that change repository state
+
+Koba should never store GitHub tokens. It should use existing Git, SSH, Git Credential Manager, or GitHub CLI authentication.
+
+## Design Direction
+
+Core concepts:
+
+* `koba.yml` is the repo workflow contract.
+* `scan` inspects the repository and discovers workflow infrastructure.
+* `doctor` diagnoses missing or inconsistent workflow pieces.
+* `run` executes configured checks.
+* `hooks` installs or manages adapters such as native Git hooks or Husky.
+* `suggest-commit` proposes Conventional Commit messages and file groupings.
+* `pr` prepares PR titles/bodies and may later integrate with GitHub CLI.
+
+Prefer adapters over replacement:
+
+* Husky adapter for JS/TS repositories.
+* Native Git hooks adapter for general repositories.
+* GitHub CLI adapter for authenticated GitHub operations.
+* `.github/` discovery for workflows, PR templates, issue templates, CODEOWNERS, and Dependabot config.
+
+## Response Style
+
+When finished, report:
+
+1. What changed.
+2. Files changed.
+3. Commands run and results.
+4. Important design decisions.
+5. Suggested next step.
+
+Optional:
+6. When useful, suggest a surgical commit flow using focused commands and the convention type(scope): description.
+
+Keep summaries concise but specific.
