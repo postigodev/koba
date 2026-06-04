@@ -13,7 +13,7 @@ pub fn scan() -> Result<(), String> {
 }
 
 pub fn doctor() -> Result<(), String> {
-    placeholder("doctor", "diagnose workflow setup and safety issues")
+    crate::doctor::run(std::env::current_dir().map_err(|error| error.to_string())?)
 }
 
 pub fn run() -> Result<(), String> {
