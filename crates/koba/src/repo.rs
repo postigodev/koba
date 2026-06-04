@@ -30,10 +30,10 @@ pub struct RepoFiles {
 pub fn discover(root: &Path, git_dir: Option<&Path>) -> RepoFiles {
     RepoFiles {
         workflow: WorkflowFiles {
-            koba_yml: exists(root.join("koba.yml")),
-            package_json: exists(root.join("package.json")),
-            cargo_toml: exists(root.join("Cargo.toml")),
-            pyproject_toml: exists(root.join("pyproject.toml")),
+            koba_yml: is_file(root.join("koba.yml")),
+            package_json: is_file(root.join("package.json")),
+            cargo_toml: is_file(root.join("Cargo.toml")),
+            pyproject_toml: is_file(root.join("pyproject.toml")),
             husky_dir: is_dir(root.join(".husky")),
             native_pre_commit: git_hook_exists(git_dir, "pre-commit"),
             native_pre_push: git_hook_exists(git_dir, "pre-push"),
@@ -41,10 +41,10 @@ pub fn discover(root: &Path, git_dir: Option<&Path>) -> RepoFiles {
         github: GithubFiles {
             github_dir: is_dir(root.join(".github")),
             workflows_dir: is_dir(root.join(".github").join("workflows")),
-            pull_request_template: exists(root.join(".github").join("pull_request_template.md")),
+            pull_request_template: is_file(root.join(".github").join("pull_request_template.md")),
             issue_template_dir: is_dir(root.join(".github").join("ISSUE_TEMPLATE")),
-            codeowners: exists(root.join(".github").join("CODEOWNERS")),
-            dependabot_yml: exists(root.join(".github").join("dependabot.yml")),
+            codeowners: is_file(root.join(".github").join("CODEOWNERS")),
+            dependabot_yml: is_file(root.join(".github").join("dependabot.yml")),
         },
     }
 }
@@ -52,11 +52,11 @@ pub fn discover(root: &Path, git_dir: Option<&Path>) -> RepoFiles {
 fn git_hook_exists(git_dir: Option<&Path>, hook: &str) -> bool {
     git_dir
         .map(|path| path.join("hooks").join(hook))
-        .is_some_and(exists)
+        .is_some_and(is_file)
 }
 
-fn exists(path: PathBuf) -> bool {
-    path.exists()
+fn is_file(path: PathBuf) -> bool {
+    path.is_file()
 }
 
 fn is_dir(path: PathBuf) -> bool {
@@ -72,25 +72,67 @@ mod tests {
     };
 
     #[test]
-    fn detects_cargo_toml_and_github_pull_request_template() {
+    fn detects_all_workflow_and_github_fixture_paths() {
         let fixture = TempTree::new();
-        fs::write(fixture.path().join("Cargo.toml"), "").unwrap();
-        fs::create_dir(fixture.path().join(".github")).unwrap();
-        fs::write(
-            fixture
-                .path()
-                .join(".github")
-                .join("pull_request_template.md"),
-            "",
-        )
-        .unwrap();
+        fixture.file("koba.yml");
+        fixture.file("Cargo.toml");
+        fixture.file("package.json");
+        fixture.file("pyproject.toml");
+        fixture.dir(".husky");
+        fixture.file(".git/hooks/pre-commit");
+        fixture.file(".git/hooks/pre-push");
+        fixture.dir(".github/workflows");
+        fixture.file(".github/pull_request_template.md");
+        fixture.dir(".github/ISSUE_TEMPLATE");
+        fixture.file(".github/CODEOWNERS");
+        fixture.file(".github/dependabot.yml");
 
-        let files = discover(fixture.path(), None);
+        let files = discover(fixture.path(), Some(&fixture.path().join(".git")));
 
+        assert!(files.workflow.koba_yml);
         assert!(files.workflow.cargo_toml);
+        assert!(files.workflow.package_json);
+        assert!(files.workflow.pyproject_toml);
+        assert!(files.workflow.husky_dir);
+        assert!(files.workflow.native_pre_commit);
+        assert!(files.workflow.native_pre_push);
         assert!(files.github.github_dir);
+        assert!(files.github.workflows_dir);
         assert!(files.github.pull_request_template);
-        assert!(!files.workflow.koba_yml);
+        assert!(files.github.issue_template_dir);
+        assert!(files.github.codeowners);
+        assert!(files.github.dependabot_yml);
+    }
+
+    #[test]
+    fn missing_fixture_paths_are_reported_as_absent() {
+        let fixture = TempTree::new();
+
+        let files = discover(fixture.path(), Some(&fixture.path().join(".git")));
+
+        assert_eq!(
+            files.workflow,
+            WorkflowFiles {
+                koba_yml: false,
+                package_json: false,
+                cargo_toml: false,
+                pyproject_toml: false,
+                husky_dir: false,
+                native_pre_commit: false,
+                native_pre_push: false,
+            }
+        );
+        assert_eq!(
+            files.github,
+            GithubFiles {
+                github_dir: false,
+                workflows_dir: false,
+                pull_request_template: false,
+                issue_template_dir: false,
+                codeowners: false,
+                dependabot_yml: false,
+            }
+        );
     }
 
     struct TempTree {
@@ -110,6 +152,18 @@ mod tests {
 
         fn path(&self) -> &Path {
             &self.path
+        }
+
+        fn dir(&self, relative: &str) {
+            fs::create_dir_all(self.path.join(relative)).unwrap();
+        }
+
+        fn file(&self, relative: &str) {
+            let path = self.path.join(relative);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).unwrap();
+            }
+            fs::write(path, "").unwrap();
         }
     }
 

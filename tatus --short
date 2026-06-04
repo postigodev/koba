@@ -1,0 +1,4 @@
+ ,gitattributes            |   5 [31m---[m
+ crates/koba/src/output.rs |  13 [32m++++++[m
+ crates/koba/src/repo.rs   | 102 [32m+++++++++++++++++++++++++++++++++++[m[31m-----------[m
+ 3 files changed, 91 insertions(+), 29 deletions(-)
