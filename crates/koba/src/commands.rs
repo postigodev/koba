@@ -4,8 +4,11 @@ fn placeholder(command: &str, purpose: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub fn init() -> Result<(), String> {
-    placeholder("init", "plan a local-first workflow configuration")
+pub fn init(apply: bool) -> Result<(), String> {
+    crate::init::run(
+        std::env::current_dir().map_err(|error| error.to_string())?,
+        crate::init::InitOptions { apply },
+    )
 }
 
 pub fn scan() -> Result<(), String> {
@@ -16,8 +19,11 @@ pub fn doctor() -> Result<(), String> {
     crate::doctor::run(std::env::current_dir().map_err(|error| error.to_string())?)
 }
 
-pub fn run() -> Result<(), String> {
-    placeholder("run", "execute a configured workflow check")
+pub fn run(stage: crate::run_checks::Stage, dry_run: bool) -> Result<(), String> {
+    crate::run_checks::run(
+        std::env::current_dir().map_err(|error| error.to_string())?,
+        crate::run_checks::RunOptions { stage, dry_run },
+    )
 }
 
 pub fn hooks() -> Result<(), String> {

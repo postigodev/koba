@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-use crate::commands;
+use crate::{commands, run_checks::Stage};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -17,13 +17,23 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Create a starter koba.yml for the current repository.
-    Init,
+    Init {
+        /// Write the proposed koba.yml to the current directory.
+        #[arg(long)]
+        apply: bool,
+    },
     /// Inspect workflow infrastructure and report what Koba finds.
     Scan,
     /// Diagnose workflow issues and unsafe assumptions.
     Doctor,
     /// Run a named workflow check.
-    Run,
+    Run {
+        /// Stage to run.
+        stage: Stage,
+        /// Print checks without executing them.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Inspect or plan hook installation.
     Hooks,
     /// Suggest a commit command from staged changes.
@@ -36,10 +46,10 @@ pub fn run() -> Result<(), String> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Init => commands::init(),
+        Command::Init { apply } => commands::init(apply),
         Command::Scan => commands::scan(),
         Command::Doctor => commands::doctor(),
-        Command::Run => commands::run(),
+        Command::Run { stage, dry_run } => commands::run(stage, dry_run),
         Command::Hooks => commands::hooks(),
         Command::SuggestCommit => commands::suggest_commit(),
         Command::Pr => commands::pr(),

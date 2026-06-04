@@ -8,3 +8,5 @@ description = "A local-first Git workflow configurator."
 
 [dependencies]
 clap.workspace = true
+serde.workspace = true
+serde_yml.workspace = true
