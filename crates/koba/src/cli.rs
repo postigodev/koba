@@ -1,0 +1,47 @@
+use clap::{Parser, Subcommand};
+
+use crate::commands;
+
+#[derive(Debug, Parser)]
+#[command(
+    name = "koba",
+    version,
+    about = "Local-first Git workflow configurator",
+    long_about = "Koba scans and configures repository workflow infrastructure such as commit conventions, hooks, CI checks, PR templates, and repo hygiene."
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Create a starter koba.yml for the current repository.
+    Init,
+    /// Inspect workflow infrastructure and report what Koba finds.
+    Scan,
+    /// Diagnose workflow issues and unsafe assumptions.
+    Doctor,
+    /// Run a named workflow check.
+    Run,
+    /// Inspect or plan hook installation.
+    Hooks,
+    /// Suggest a commit command from staged changes.
+    SuggestCommit,
+    /// Inspect or prepare pull request workflow assets.
+    Pr,
+}
+
+pub fn run() -> Result<(), String> {
+    let cli = Cli::parse();
+
+    match cli.command {
+        Command::Init => commands::init(),
+        Command::Scan => commands::scan(),
+        Command::Doctor => commands::doctor(),
+        Command::Run => commands::run(),
+        Command::Hooks => commands::hooks(),
+        Command::SuggestCommit => commands::suggest_commit(),
+        Command::Pr => commands::pr(),
+    }
+}

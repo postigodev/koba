@@ -1,0 +1,30 @@
+# Example Koba configuration.
+#
+# This file is illustrative. The schema is not implemented yet.
+
+version: 1
+
+repository:
+  default_branch: main
+
+commits:
+  convention: conventional
+  require_signed: false
+
+checks:
+  pre_commit:
+    - name: format
+      command: cargo fmt --check
+    - name: test
+      command: cargo test
+  pre_push:
+    - name: clippy
+      command: cargo clippy --all-targets --all-features -- -D warnings
+
+pull_requests:
+  template: .github/pull_request_template.md
+  require_body: true
+
+hooks:
+  manager: manual
+  recommend_install: true
