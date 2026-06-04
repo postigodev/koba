@@ -137,6 +137,41 @@ checks:
     assert!(stdout.contains("echo changed"));
 }
 
+#[test]
+fn cli_hooks_install_native_dry_run_previews_without_writing() {
+    let fixture = TempTree::new();
+    let output = Command::new("git")
+        .arg("init")
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run git init");
+    assert!(
+        output.status.success(),
+        "git init failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_koba"))
+        .args(["hooks", "install", "--adapter", "native", "--dry-run"])
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run koba binary");
+
+    assert!(
+        output.status.success(),
+        "expected success, got status {:?}, stderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!fixture.path().join(".git/hooks/pre-commit").exists());
+    assert!(!fixture.path().join(".git/hooks/pre-push").exists());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Koba hooks install"));
+    assert!(stdout.contains("Would write"));
+    assert!(stdout.contains("koba run pre-commit"));
+}
+
 struct TempTree {
     path: PathBuf,
 }

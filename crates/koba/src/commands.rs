@@ -26,8 +26,19 @@ pub fn run(stage: crate::run_checks::Stage, dry_run: bool) -> Result<(), String>
     )
 }
 
-pub fn hooks() -> Result<(), String> {
-    placeholder("hooks", "inspect or plan Git hook configuration")
+pub fn hooks_install(
+    adapter: crate::hooks::HookAdapter,
+    dry_run: bool,
+    apply: bool,
+) -> Result<(), String> {
+    crate::hooks::run_install(
+        std::env::current_dir().map_err(|error| error.to_string())?,
+        crate::hooks::InstallOptions {
+            adapter,
+            dry_run,
+            apply,
+        },
+    )
 }
 
 pub fn suggest_commit() -> Result<(), String> {

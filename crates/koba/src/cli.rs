@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-use crate::{commands, run_checks::Stage};
+use crate::{commands, hooks::HooksCommand, run_checks::Stage};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -35,7 +35,10 @@ enum Command {
         dry_run: bool,
     },
     /// Inspect or plan hook installation.
-    Hooks,
+    Hooks {
+        #[command(subcommand)]
+        command: HooksCommand,
+    },
     /// Suggest a commit command from staged changes.
     SuggestCommit,
     /// Inspect or prepare pull request workflow assets.
@@ -50,7 +53,13 @@ pub fn run() -> Result<(), String> {
         Command::Scan => commands::scan(),
         Command::Doctor => commands::doctor(),
         Command::Run { stage, dry_run } => commands::run(stage, dry_run),
-        Command::Hooks => commands::hooks(),
+        Command::Hooks { command } => match command {
+            HooksCommand::Install {
+                adapter,
+                dry_run,
+                apply,
+            } => commands::hooks_install(adapter, dry_run, apply),
+        },
         Command::SuggestCommit => commands::suggest_commit(),
         Command::Pr => commands::pr(),
     }
