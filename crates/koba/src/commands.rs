@@ -9,7 +9,7 @@ pub fn init() -> Result<(), String> {
 }
 
 pub fn scan() -> Result<(), String> {
-    placeholder("scan", "inspect repository workflow infrastructure")
+    crate::scan::run(std::env::current_dir().map_err(|error| error.to_string())?)
 }
 
 pub fn doctor() -> Result<(), String> {

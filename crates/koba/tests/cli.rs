@@ -1,7 +1,7 @@
 use std::process::Command;
 
 #[test]
-fn cli_can_run_a_placeholder_command() {
+fn cli_can_run_scan() {
     let output = Command::new(env!("CARGO_BIN_EXE_koba"))
         .arg("scan")
         .output()
@@ -15,6 +15,8 @@ fn cli_can_run_a_placeholder_command() {
     );
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("koba scan"));
-    assert!(stdout.contains("placeholder"));
+    assert!(stdout.contains("Koba scan"));
+    assert!(stdout.contains("Repository"));
+    assert!(stdout.contains("Workflow"));
+    assert!(stdout.contains("GitHub"));
 }
