@@ -49,7 +49,7 @@ pub fn github(command: crate::github::GithubCommand) -> Result<(), String> {
 }
 
 pub fn suggest_commit() -> Result<(), String> {
-    placeholder("suggest-commit", "suggest a safe commit command")
+    crate::suggest_commit::run(std::env::current_dir().map_err(|error| error.to_string())?)
 }
 
 pub fn pr() -> Result<(), String> {

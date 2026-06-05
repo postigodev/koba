@@ -11,5 +11,6 @@ mod output;
 mod repo;
 mod run_checks;
 mod scan;
+mod suggest_commit;
 
 pub use cli::run;

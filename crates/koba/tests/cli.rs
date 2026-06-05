@@ -200,6 +200,65 @@ fn cli_github_template_pr_dry_run_previews_without_writing() {
     assert!(stdout.contains("## Notes for reviewer"));
 }
 
+#[test]
+fn cli_suggest_commit_reports_clean_git_tree() {
+    let fixture = TempTree::new();
+    fixture.git_init();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_koba"))
+        .arg("suggest-commit")
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run koba binary");
+
+    assert!(
+        output.status.success(),
+        "expected success, got status {:?}, stderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Koba suggest-commit"));
+    assert!(stdout.contains("Working tree is clean"));
+}
+
+#[test]
+fn cli_suggest_commit_recommends_commands_without_staging() {
+    let fixture = TempTree::new();
+    fixture.git_init();
+    fixture.file("docs/change.md");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_koba"))
+        .arg("suggest-commit")
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run koba binary");
+
+    assert!(
+        output.status.success(),
+        "expected success, got status {:?}, stderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("docs/change.md"));
+    assert!(stdout.contains("docs: update documentation"));
+    assert!(stdout.contains("git add -- \"docs/change.md\""));
+    assert!(stdout.contains("git commit -m \"docs: update documentation\""));
+
+    let status = Command::new("git")
+        .args(["status", "--porcelain", "--untracked-files=all"])
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run git status");
+    assert_eq!(
+        String::from_utf8_lossy(&status.stdout),
+        "?? docs/change.md\n"
+    );
+}
+
 struct TempTree {
     path: PathBuf,
 }
@@ -225,6 +284,19 @@ impl TempTree {
             fs::create_dir_all(parent).unwrap();
         }
         fs::write(path, "").unwrap();
+    }
+
+    fn git_init(&self) {
+        let output = Command::new("git")
+            .arg("init")
+            .current_dir(&self.path)
+            .output()
+            .expect("failed to run git init");
+        assert!(
+            output.status.success(),
+            "git init failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }
 
