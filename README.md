@@ -1,3 +1,11 @@
+<p align="center">
+  <img src="assets/brand/koba-logo-horizontal.png" alt="Koba logo" width="420">
+</p>
+
+<p align="center">
+  Local-first Git workflow configuration for real repositories.
+</p>
+
 # Koba
 
 Koba is a local-first Git workflow configurator for real repositories. It helps you inspect workflow infrastructure, draft a repo workflow contract, run configured checks, connect hooks, generate PR templates, and prepare commit/PR text without taking over Git.
