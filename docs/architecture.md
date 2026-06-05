@@ -1,6 +1,6 @@
 # Architecture
 
-Koba starts as a small Rust workspace with one CLI crate. Keep that shape for now. The project should gain internal modules before it gains more crates, avoiding premature workspace abstraction while the product model is still settling.
+Koba is a Rust workspace with one CLI crate at `crates/koba`. Keep this single-crate shape until module boundaries become stable enough to justify splitting crates.
 
 ## Current Structure
 
@@ -13,63 +13,69 @@ Koba starts as a small Rust workspace with one CLI crate. Keep that shape for no
 │       ├── src/
 │       │   ├── cli.rs
 │       │   ├── commands.rs
+│       │   ├── config.rs
+│       │   ├── doctor.rs
+│       │   ├── executor.rs
+│       │   ├── git.rs
+│       │   ├── github.rs
+│       │   ├── hooks.rs
+│       │   ├── init.rs
+│       │   ├── output.rs
+│       │   ├── pr.rs
+│       │   ├── repo.rs
+│       │   ├── run_checks.rs
+│       │   ├── scan.rs
+│       │   ├── suggest_commit.rs
 │       │   ├── lib.rs
 │       │   └── main.rs
 │       └── tests/
 │           └── cli.rs
 ├── docs/
-│   ├── architecture.md
-│   └── product.md
-└── examples/
-    └── koba.yml
+├── examples/
+└── README.md
 ```
 
-## Intended Module Direction
+## Modules
 
-- `cli`: argument parsing and command dispatch.
-- `commands`: user-visible command handlers.
-- `repo`: repository discovery, root detection, and file scanning.
-- `github`: `.github/` scanning for workflows, pull request templates, issue templates, and repository automation files.
-- `diagnostics`: findings, severities, recommendations, and explainable output.
-- `config`: `koba.yml` model, loading, validation, and defaults.
-- `hooks`: adapters for native Git hooks and hook managers such as Husky.
-- `exec`: command execution wrappers for scoped checks and external tools.
-- `apply`: file writing plans, previews, diffs, and explicit apply behavior.
-- `git`: future narrow shell-out wrapper around the `git` executable.
-- `workflow`: future check and hook model.
+- `cli`: `clap` command definitions and top-level dispatch.
+- `commands`: thin user-command handlers that pass current directory/options into modules.
+- `git`: narrow shell-out helpers for Git discovery, status, and simple branch/commit lookup.
+- `repo`: file-tree discovery for workflow files, hooks, and `.github/` assets.
+- `scan`: read-only workflow overview rendering.
+- `doctor`: structured diagnostics and recommendations from scan data.
+- `init`: preview/apply generation for `koba.yml`.
+- `config`: minimal YAML config model and parser for `koba.yml`.
+- `executor`: platform shell execution for configured checks.
+- `run_checks`: stage selection and execution for `pre-commit` and `pre-push`.
+- `hooks`: preview/apply plans for native Git hooks and Husky hooks.
+- `github`: preview/apply generation for GitHub PR templates.
+- `suggest_commit`: deterministic Conventional Commit recommendation heuristics.
+- `pr`: local PR title/body drafting and optional `.koba/pr-body.md` output.
+- `output`: centralized status line formatting.
 
 ## Design Decisions
 
-- Use `clap` derive for a clear CLI surface and generated help.
-- Keep `main.rs` tiny so the binary only handles process exit behavior.
-- Prefer shelling out to `git` later instead of adding `git2` immediately.
-- Keep configuration YAML-based eventually, but avoid implementing parsing before the schema is useful.
-- Keep commands placeholder-only until scan and diagnostics behavior is designed.
-- Add integration tests around the binary for user-visible behavior.
-- Treat `.github/` as a first-class workflow surface, not a special case hidden inside generic file scanning.
+- Use `clap` derive for a clear CLI surface.
+- Keep `main.rs` tiny and return process exit codes from command results.
+- Shell out to `git` instead of using `git2`.
+- Keep file writes behind explicit `--apply` flows.
+- Represent generated writes as simple plans with target path, contents, and existing-file state.
+- Keep `commands.rs` thin so behavior is testable in modules.
+- Keep config parsing minimal and forward-compatible with unknown fields.
 
 ## Safety Model
 
-Koba should separate read, preview, and write behavior.
+Koba separates read, preview, and write behavior.
 
-- Discovery commands read repository state and produce findings.
-- Recommendation commands explain what could improve and why.
-- Preview commands show planned file changes before writing.
-- Apply commands write files only after an explicit flag or interactive confirmation.
-
-Koba must never rewrite history, auto-commit, push, store GitHub tokens, or hide file changes from the user. Future GitHub CLI integration should call `gh` and inherit its existing authentication.
-
-## Adapter Model
-
-- Native Git hooks: inspect and plan hook files without assuming a package manager.
-- Husky: treat Husky as an adapter for JavaScript repositories, not as a competitor.
-- GitHub CLI: use `gh` for authenticated GitHub operations later, without storing tokens.
-- `.github` generation: preview and apply workflow files, PR templates, issue templates, and related repository assets.
+- `scan`, `doctor`, `suggest-commit`, and default `pr` are read/recommend-only.
+- `init`, `hooks install`, `github template pr`, and `pr` preview by default.
+- `--apply` writes only the documented target file(s).
+- Existing files are not overwritten.
+- Koba does not commit, push, rewrite history, store GitHub tokens, call GitHub APIs, or open PRs.
 
 ## Testing Strategy
 
-- CLI smoke tests for command availability and placeholder behavior.
-- Temp repo fixture tests for repository discovery and command behavior.
-- Scanner tests using synthetic file trees for `.github/`, hooks, and config detection.
-- No tests should mutate a real user repository.
-- Apply-plan tests should assert planned writes before any file is written.
+- Unit tests cover parser behavior, scanner fixtures, diagnostics, generation plans, and deterministic heuristics.
+- CLI integration tests run the compiled binary in temporary directories and temporary Git repositories.
+- Tests avoid mutating the real repository.
+- Apply-plan tests assert both preview behavior and no-overwrite behavior.

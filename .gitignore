@@ -1,4 +1,5 @@
 /target/
+/.koba/
 
 # Local editor and OS files
 .DS_Store
