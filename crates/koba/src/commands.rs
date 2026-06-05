@@ -1,9 +1,3 @@
-fn placeholder(command: &str, purpose: &str) -> Result<(), String> {
-    println!("koba {command}: {purpose}");
-    println!("status: placeholder");
-    Ok(())
-}
-
 pub fn init(apply: bool) -> Result<(), String> {
     crate::init::run(
         std::env::current_dir().map_err(|error| error.to_string())?,
@@ -52,6 +46,9 @@ pub fn suggest_commit() -> Result<(), String> {
     crate::suggest_commit::run(std::env::current_dir().map_err(|error| error.to_string())?)
 }
 
-pub fn pr() -> Result<(), String> {
-    placeholder("pr", "inspect or prepare pull request workflow assets")
+pub fn pr(dry_run: bool, apply: bool) -> Result<(), String> {
+    crate::pr::run(
+        std::env::current_dir().map_err(|error| error.to_string())?,
+        crate::pr::PrOptions { dry_run, apply },
+    )
 }

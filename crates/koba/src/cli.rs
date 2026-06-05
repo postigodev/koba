@@ -47,7 +47,14 @@ enum Command {
     /// Suggest a commit command from staged changes.
     SuggestCommit,
     /// Inspect or prepare pull request workflow assets.
-    Pr,
+    Pr {
+        /// Preview without writing files.
+        #[arg(long)]
+        dry_run: bool,
+        /// Write the PR body draft to .koba/pr-body.md.
+        #[arg(long)]
+        apply: bool,
+    },
 }
 
 pub fn run() -> Result<(), String> {
@@ -67,6 +74,6 @@ pub fn run() -> Result<(), String> {
         },
         Command::Github { command } => commands::github(command),
         Command::SuggestCommit => commands::suggest_commit(),
-        Command::Pr => commands::pr(),
+        Command::Pr { dry_run, apply } => commands::pr(dry_run, apply),
     }
 }

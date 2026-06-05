@@ -259,6 +259,33 @@ fn cli_suggest_commit_recommends_commands_without_staging() {
     );
 }
 
+#[test]
+fn cli_pr_dry_run_previews_without_writing() {
+    let fixture = TempTree::new();
+    fixture.git_init();
+    fixture.file("docs/change.md");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_koba"))
+        .args(["pr", "--dry-run"])
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run koba binary");
+
+    assert!(
+        output.status.success(),
+        "expected success, got status {:?}, stderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!fixture.path().join(".koba/pr-body.md").exists());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Koba pr"));
+    assert!(stdout.contains("Title"));
+    assert!(stdout.contains("Body"));
+    assert!(stdout.contains("docs/change.md"));
+}
+
 struct TempTree {
     path: PathBuf,
 }

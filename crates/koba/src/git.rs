@@ -51,6 +51,33 @@ pub fn status_porcelain(cwd: &Path) -> Result<String, String> {
         .map_err(|error| format!("git status --porcelain returned invalid UTF-8: {error}"))
 }
 
+pub fn commits_since_base(cwd: &Path) -> Option<(String, Vec<String>)> {
+    let base = default_base_branch(cwd)?;
+    let range = format!("{base}..HEAD");
+    let output = git_output(cwd, &["log", "--format=%s", &range])?;
+    let commits = output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+
+    Some((base, commits))
+}
+
+fn default_base_branch(cwd: &Path) -> Option<String> {
+    if let Some(symbolic) = git_output(cwd, &["symbolic-ref", "refs/remotes/origin/HEAD"]) {
+        if let Some((_, branch)) = symbolic.rsplit_once('/') {
+            return Some(format!("origin/{branch}"));
+        }
+    }
+
+    ["origin/main", "origin/master"]
+        .into_iter()
+        .find(|branch| git_output(cwd, &["rev-parse", "--verify", branch]).is_some())
+        .map(str::to_owned)
+}
+
 fn git_output(cwd: &Path, args: &[&str]) -> Option<String> {
     let output = Command::new("git")
         .args(args)

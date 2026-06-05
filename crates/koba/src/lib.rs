@@ -8,6 +8,7 @@ mod github;
 mod hooks;
 mod init;
 mod output;
+mod pr;
 mod repo;
 mod run_checks;
 mod scan;
