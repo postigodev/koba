@@ -26,6 +26,22 @@ Koba is built around a simple safety model: read first, recommend next, preview 
 - Suggest Conventional Commit messages and safe Git commands.
 - Draft a local PR title/body without opening a PR.
 
+## Install
+
+Koba is early MVP software. The CLI is useful for local dogfooding today, but the command surface and config schema may still change.
+
+Install the CLI locally from this workspace:
+
+```sh
+cargo install --path crates/koba
+```
+
+Or run it directly from the workspace:
+
+```sh
+cargo run -p koba -- scan
+```
+
 ## Quickstart
 
 From a Git repository:

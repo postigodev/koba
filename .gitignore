@@ -4,6 +4,11 @@
 # Local editor and OS files
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.tmp
 
 # Local environment files
 .env

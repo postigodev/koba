@@ -4,8 +4,9 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/your-org/koba"
+license = "MIT"
+repository = "https://github.com/postigodev/koba"
+homepage = "https://github.com/postigodev/koba"
 
 [workspace.dependencies]
 clap = { version = "4.5", features = ["derive"] }
