@@ -4,6 +4,7 @@ mod config;
 mod doctor;
 mod executor;
 mod git;
+mod github;
 mod hooks;
 mod init;
 mod output;

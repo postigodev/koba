@@ -172,6 +172,34 @@ fn cli_hooks_install_native_dry_run_previews_without_writing() {
     assert!(stdout.contains("koba run pre-commit"));
 }
 
+#[test]
+fn cli_github_template_pr_dry_run_previews_without_writing() {
+    let fixture = TempTree::new();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_koba"))
+        .args(["github", "template", "pr", "--dry-run"])
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run koba binary");
+
+    assert!(
+        output.status.success(),
+        "expected success, got status {:?}, stderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!fixture
+        .path()
+        .join(".github/pull_request_template.md")
+        .exists());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Koba github template pr"));
+    assert!(stdout.contains("Would write"));
+    assert!(stdout.contains("## Summary"));
+    assert!(stdout.contains("## Notes for reviewer"));
+}
+
 struct TempTree {
     path: PathBuf,
 }

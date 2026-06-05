@@ -41,6 +41,13 @@ pub fn hooks_install(
     )
 }
 
+pub fn github(command: crate::github::GithubCommand) -> Result<(), String> {
+    crate::github::run(
+        std::env::current_dir().map_err(|error| error.to_string())?,
+        command,
+    )
+}
+
 pub fn suggest_commit() -> Result<(), String> {
     placeholder("suggest-commit", "suggest a safe commit command")
 }

@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-use crate::{commands, hooks::HooksCommand, run_checks::Stage};
+use crate::{commands, github::GithubCommand, hooks::HooksCommand, run_checks::Stage};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -39,6 +39,11 @@ enum Command {
         #[command(subcommand)]
         command: HooksCommand,
     },
+    /// Preview or generate GitHub workflow infrastructure.
+    Github {
+        #[command(subcommand)]
+        command: GithubCommand,
+    },
     /// Suggest a commit command from staged changes.
     SuggestCommit,
     /// Inspect or prepare pull request workflow assets.
@@ -60,6 +65,7 @@ pub fn run() -> Result<(), String> {
                 apply,
             } => commands::hooks_install(adapter, dry_run, apply),
         },
+        Command::Github { command } => commands::github(command),
         Command::SuggestCommit => commands::suggest_commit(),
         Command::Pr => commands::pr(),
     }
