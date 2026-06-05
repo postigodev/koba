@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/brand/koba-logo-horizontal.png" alt="Koba logo" width="420">
+  <img src="assets/brand/koba-logo-stacked.png" alt="Koba logo" width="420">
 </p>
 
 <p align="center">
