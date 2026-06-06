@@ -37,7 +37,23 @@ Koba is built around a simple safety model: read first, recommend next, preview 
 
 Koba is early MVP software. The CLI is useful for local dogfooding today, but the command surface and config schema may still change.
 
-Install the CLI locally from this workspace:
+On Windows, install Koba with Scoop:
+
+```powershell
+scoop bucket add postigodev https://github.com/postigodev/scoop-bucket
+scoop install koba
+```
+
+Update or uninstall it with:
+
+```powershell
+scoop update koba
+scoop uninstall koba
+```
+
+You can also download prebuilt binaries from GitHub Releases once releases are available.
+
+For local development, install the CLI from this workspace:
 
 ```sh
 cargo install --path crates/koba
@@ -49,7 +65,7 @@ Or run it directly from the workspace:
 cargo run -p koba -- scan
 ```
 
-Prebuilt GitHub Release binaries are produced from version tags once releases are cut. See [docs/distribution.md](docs/distribution.md) for the staged distribution plan.
+See [docs/distribution.md](docs/distribution.md) for the staged distribution plan.
 
 ## Quickstart
 

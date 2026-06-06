@@ -1,18 +1,18 @@
 # Distribution Plan
 
-Koba is not published to package managers yet. The first distribution goal is to make local builds and GitHub Release artifacts reproducible before wiring any package-manager channel that publishes automatically.
+Koba is distributed for Windows through a custom Scoop bucket and through GitHub Release artifacts. Other package-manager channels remain intentionally manual for now.
 
 ## Recommended Phases
 
 ### Phase 0: Local Install
 
-Current supported path:
+Local development install path:
 
 ```sh
 cargo install --path crates/koba
 ```
 
-This is the best install path while Koba is changing quickly. It requires Rust but avoids package-manager promises before the CLI and config schema settle.
+This requires Rust and installs from the checked-out workspace.
 
 ### Phase 1: Local Release Artifact Builds
 
@@ -94,9 +94,34 @@ Do not configure a tap until the repository exists, token permissions are unders
 
 ### Phase 5: Scoop Bucket
 
-Scoop is a good Windows follow-up once GitHub Release assets and checksums are predictable. Use a dedicated bucket manifest that downloads the Windows archive.
+Implemented and validated for Windows through the custom bucket:
 
-Do not automate bucket publication until the asset naming scheme is stable.
+```powershell
+scoop bucket add postigodev https://github.com/postigodev/scoop-bucket
+scoop install koba
+```
+
+The bucket manifest downloads the cargo-dist Windows archive:
+
+```text
+koba-x86_64-pc-windows-msvc.zip
+```
+
+The archive contains `koba.exe` at its root, and Scoop verifies the release SHA-256 before installing. The installed shim exposes `koba` globally.
+
+Validated behavior:
+
+- `scoop install koba` installed Koba `0.1.1`.
+- `koba scan` and `koba doctor` worked from an unrelated repository.
+- `scoop update koba` completed successfully.
+- uninstall and reinstall were tested successfully.
+
+Maintenance expectation:
+
+- Keep `packaging/scoop/bucket/koba.json` as the reviewable source manifest in this repo.
+- Publish the manifest to `postigodev/scoop-bucket` for end users.
+- Let Scoop `checkver`/`autoupdate` track GitHub releases where possible.
+- Manually review manifest updates before merging them into the bucket.
 
 ### Phase 6: npm/npx or pnpx Wrapper
 
@@ -126,7 +151,7 @@ Do not prioritize apt/deb until direct GitHub Release installs and Homebrew/Scoo
 - crates.io publishing.
 - npm publishing.
 - Homebrew tap publishing.
-- Scoop bucket publishing.
+- Scoop publishing beyond the custom `postigodev/scoop-bucket` bucket.
 - winget submission.
 - apt/deb repository publishing.
 - Tag creation.
@@ -135,9 +160,9 @@ Do not prioritize apt/deb until direct GitHub Release installs and Homebrew/Scoo
 
 ## Recommended First Release Path
 
-1. Keep local install as the documented stable path.
+1. Keep local Cargo install available for development.
 2. Validate dist locally with `dist plan`.
 3. Build one local artifact with `dist build --artifacts=local`.
 4. Review artifact names, archive contents, and checksums.
-5. Merge the release workflow only after CI and local dist output are reviewed.
-6. Cut the first GitHub Release by pushing a reviewed `v*` tag.
+5. Cut GitHub Releases by pushing reviewed `v*` tags.
+6. Update or verify the Scoop manifest for each release.
