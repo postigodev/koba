@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0 - 2026-06-06
+
 - Added read-only repository scanning with `koba scan`.
 - Added workflow diagnostics with `koba doctor`.
 - Added preview/apply workflow contract generation with `koba init`.
