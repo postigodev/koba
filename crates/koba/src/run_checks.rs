@@ -39,14 +39,16 @@ pub fn run(cwd: PathBuf, options: RunOptions) -> Result<(), String> {
         Err(error) => {
             println!("Koba run");
             println!();
-            println!("{}", output::line(Status::Missing, &error));
+            let status = if error.starts_with("check command failed") {
+                Status::Fail
+            } else {
+                Status::Error
+            };
+            println!("{}", output::line(status, &error));
             if error.starts_with("koba.yml not found") {
                 println!(
                     "{}",
-                    output::line(
-                        Status::Step,
-                        "Run `koba init` to create a workflow contract"
-                    )
+                    output::next_step("Run `koba init` to create a workflow contract")
                 );
             }
             Err(error)
@@ -57,14 +59,14 @@ pub fn run(cwd: PathBuf, options: RunOptions) -> Result<(), String> {
 pub fn execute(cwd: PathBuf, options: RunOptions) -> Result<String, String> {
     let config = config::load_from_repo(&cwd)?;
     let checks = checks_for_stage(&config, options.stage);
-    let mut output = render_header(options.stage, options.dry_run);
+    let mut output = render_header(options.stage);
 
     if checks.is_empty() {
         writeln!(
             output,
             "{}",
             output::line(
-                Status::Ok,
+                Status::Skip,
                 format!("No checks configured for {}", options.stage.label())
             )
         )
@@ -73,10 +75,13 @@ pub fn execute(cwd: PathBuf, options: RunOptions) -> Result<String, String> {
     }
 
     for check in checks {
-        writeln!(output, "{}", render_check_line(check)).unwrap();
-
-        if !options.dry_run {
+        if options.dry_run {
+            writeln!(output, "{}", output::line(Status::Plan, &check.command)).unwrap();
+        } else {
+            writeln!(output, "{}", output::line(Status::Run, &check.command)).unwrap();
             executor::run_shell(&cwd, &check.command)?;
+            writeln!(output, "{}", output::line(Status::Pass, &check.command)).unwrap();
+            writeln!(output).unwrap();
         }
     }
 
@@ -84,11 +89,17 @@ pub fn execute(cwd: PathBuf, options: RunOptions) -> Result<String, String> {
         writeln!(
             output,
             "{}",
-            output::line(Status::Step, "Dry run only; no checks were executed")
+            output::next_step("Dry run: no commands were executed")
         )
         .unwrap();
     } else {
-        writeln!(output, "{}", output::line(Status::Ok, "All checks passed")).unwrap();
+        writeln!(output, "Summary").unwrap();
+        writeln!(
+            output,
+            "{}",
+            output::line(Status::Ok, format!("{} checks passed", checks.len()))
+        )
+        .unwrap();
     }
 
     Ok(output)
@@ -101,18 +112,13 @@ pub fn checks_for_stage(config: &WorkflowConfig, stage: Stage) -> &[Check] {
     }
 }
 
-fn render_header(stage: Stage, dry_run: bool) -> String {
+fn render_header(stage: Stage) -> String {
     let mut output = String::new();
-    writeln!(output, "Koba run {}", stage.label()).unwrap();
-    if dry_run {
-        writeln!(output, "{}", output::line(Status::Step, "Dry run")).unwrap();
-    }
+    writeln!(output, "Koba run").unwrap();
+    writeln!(output).unwrap();
+    writeln!(output, "Stage: {}", stage.label()).unwrap();
     writeln!(output).unwrap();
     output
-}
-
-fn render_check_line(check: &Check) -> String {
-    output::line(Status::Step, format!("{}: {}", check.name, check.command))
 }
 
 #[cfg(test)]

@@ -26,7 +26,7 @@ pub fn run(cwd: PathBuf) -> Result<(), String> {
         Err(error) => {
             println!("Koba suggest-commit");
             println!();
-            println!("{}", output::line(Status::Missing, &error));
+            println!("{}", output::line(Status::Error, &error));
             Err(error)
         }
     }
@@ -87,44 +87,35 @@ fn render(files: &[ChangedFile]) -> String {
     let paths: Vec<_> = files.iter().map(|file| file.path.as_str()).collect();
 
     writeln!(output, "Changed files").unwrap();
+    writeln!(
+        output,
+        "{}",
+        output::line(Status::Ok, format!("{} files", files.len()))
+    )
+    .unwrap();
     for file in files {
-        writeln!(
-            output,
-            "{}",
-            output::line(Status::Step, format!("{} {}", file.status, file.path))
-        )
-        .unwrap();
+        writeln!(output, "          {} {}", file.status, file.path).unwrap();
     }
 
     writeln!(output).unwrap();
     writeln!(output, "Suggested commit").unwrap();
-    writeln!(
-        output,
-        "{}",
-        output::line(Status::Ok, suggestion.message.as_str())
-    )
-    .unwrap();
-    if let Some(note) = &suggestion.note {
-        writeln!(output, "{}", output::line(Status::Warning, note)).unwrap();
-    }
+    writeln!(output, "  {}", suggestion.message).unwrap();
 
     writeln!(output).unwrap();
     writeln!(output, "Recommended commands").unwrap();
+    writeln!(output, "  git add -- {}", quote_paths(&paths)).unwrap();
     writeln!(
         output,
-        "{}",
-        output::line(Status::Step, format!("git add -- {}", quote_paths(&paths)))
+        "  git commit -m {}",
+        quote_shell_arg(&suggestion.message)
     )
     .unwrap();
-    writeln!(
-        output,
-        "{}",
-        output::line(
-            Status::Step,
-            format!("git commit -m {}", quote_shell_arg(&suggestion.message))
-        )
-    )
-    .unwrap();
+
+    if let Some(note) = &suggestion.note {
+        writeln!(output).unwrap();
+        writeln!(output, "Notes").unwrap();
+        writeln!(output, "{}", output::line(Status::Warn, note)).unwrap();
+    }
 
     output
 }

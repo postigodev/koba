@@ -78,7 +78,7 @@ pub fn run_install(cwd: PathBuf, options: InstallOptions) -> Result<(), String> 
         Err(error) => {
             println!("Koba hooks install");
             println!();
-            println!("{}", output::line(Status::Missing, &error));
+            println!("{}", output::line(Status::Error, &error));
             Err(error)
         }
     }
@@ -202,68 +202,44 @@ fn render_outcome(outcome: &InstallOutcome) -> String {
     writeln!(output, "Koba hooks install").unwrap();
     writeln!(output).unwrap();
     writeln!(output, "Adapter: {}", plan.adapter.label()).unwrap();
-
-    if applied {
-        writeln!(
-            output,
-            "{}",
-            output::line(Status::Ok, "Applied missing hook files")
-        )
-        .unwrap();
-    } else {
-        writeln!(
-            output,
-            "{}",
-            output::line(Status::Step, "Preview only; no files were written")
-        )
-        .unwrap();
-    }
+    writeln!(
+        output,
+        "Mode: {}",
+        if applied { "apply" } else { "preview" }
+    )
+    .unwrap();
 
     writeln!(output).unwrap();
     writeln!(output, "Files").unwrap();
 
     for file in &plan.files {
+        let row = if file.exists {
+            let status = if applied {
+                Status::Keep
+            } else {
+                Status::Refuse
+            };
+            output::row(status, format!("{} already exists", file.path.display()))
+        } else if applied {
+            output::row(Status::Write, file.path.display().to_string())
+        } else {
+            output::row(Status::Plan, file.path.display().to_string())
+        }
+        .detail(file.contents.trim_end());
+
+        output.push_str(&output::render_rows(&[row]));
+
         if file.exists {
             writeln!(
                 output,
                 "{}",
-                output::line(
-                    Status::Warning,
-                    format!(
-                        "{} already exists; refusing to overwrite",
-                        file.path.display()
-                    )
-                )
-            )
-            .unwrap();
-        } else if applied {
-            writeln!(
-                output,
-                "{}",
-                output::line(Status::Ok, format!("Wrote {}", file.path.display()))
-            )
-            .unwrap();
-        } else {
-            writeln!(
-                output,
-                "{}",
-                output::line(Status::Step, format!("Would write {}", file.path.display()))
+                output::next_step("Existing files are never overwritten")
             )
             .unwrap();
         }
-
-        writeln!(output, "{}", indent_contents(&file.contents)).unwrap();
     }
 
     output
-}
-
-fn indent_contents(contents: &str) -> String {
-    contents
-        .lines()
-        .map(|line| format!("    {line}"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 #[cfg(test)]

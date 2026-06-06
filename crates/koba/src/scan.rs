@@ -2,7 +2,7 @@ use std::{fmt::Write, path::PathBuf};
 
 use crate::{
     git,
-    output::{self, Status},
+    output::{self, Status, StatusRow},
     repo::{self, GithubFiles, WorkflowFiles},
 };
 
@@ -49,87 +49,45 @@ impl ScanReport {
     }
 
     fn render_repository(&self, output: &mut String) {
-        writeln!(output, "Repository").unwrap();
+        let mut rows = Vec::new();
 
         if self.git.inside_repo {
-            writeln!(
-                output,
-                "{}",
-                output::line(Status::Ok, "Git repository detected")
-            )
-            .unwrap();
+            rows.push(output::row(Status::Ok, "Git repository"));
         } else {
-            writeln!(
-                output,
-                "{}",
-                output::line(Status::Missing, "Git repository not detected")
-            )
-            .unwrap();
+            rows.push(output::row(Status::Miss, "Git repository").value("not detected"));
         }
 
         match &self.git.branch {
             Some(branch) => {
-                writeln!(
-                    output,
-                    "{}",
-                    output::line(Status::Ok, format!("Branch: {branch}"))
-                )
-                .unwrap();
+                rows.push(output::row(Status::Ok, "Branch").value(branch));
             }
             None if self.git.inside_repo => {
-                writeln!(
-                    output,
-                    "{}",
-                    output::line(Status::Warning, "Branch not available")
-                )
-                .unwrap();
+                rows.push(output::row(Status::Warn, "Branch").value("not available"));
             }
             None => {}
         }
 
         if self.git.has_origin {
-            writeln!(output, "{}", output::line(Status::Ok, "Remote: origin")).unwrap();
+            rows.push(output::row(Status::Ok, "Remote").value("origin"));
         } else if self.git.inside_repo {
-            writeln!(
-                output,
-                "{}",
-                output::line(Status::Warning, "Remote origin not configured")
-            )
-            .unwrap();
+            rows.push(output::row(Status::Warn, "Remote").value("origin not configured"));
         }
 
         if self.git.inside_repo {
-            render_config_status(output, self.git.has_user_name, "Git user.name configured");
-            render_config_status(output, self.git.has_user_email, "Git user.email configured");
+            rows.push(config_row(self.git.has_user_name, "Git user.name"));
+            rows.push(config_row(self.git.has_user_email, "Git user.email"));
         }
+
+        output::section(output, "Repository", &rows);
     }
 
     fn render_workflow(&self, output: &mut String) {
-        writeln!(output, "Workflow").unwrap();
-        render_file_status(
-            output,
-            self.workflow.koba_yml,
-            "koba.yml found",
-            "koba.yml not found",
-        );
-        render_file_status(
-            output,
-            self.workflow.package_json,
-            "package.json found",
-            "package.json not found",
-        );
-        render_file_status(
-            output,
-            self.workflow.cargo_toml,
-            "Cargo.toml found",
-            "Cargo.toml not found",
-        );
-        render_file_status(
-            output,
-            self.workflow.pyproject_toml,
-            "pyproject.toml found",
-            "pyproject.toml not found",
-        );
+        let mut rows = vec![
+            file_row(self.workflow.koba_yml, "koba.yml"),
+            file_row(self.workflow.package_json, "package.json"),
+            file_row(self.workflow.cargo_toml, "Cargo.toml"),
+            file_row(self.workflow.pyproject_toml, "pyproject.toml"),
+        ];
 
         let mut hook_sources = Vec::new();
         if self.workflow.husky_dir {
@@ -143,71 +101,36 @@ impl ScanReport {
         }
 
         if hook_sources.is_empty() {
-            writeln!(
-                output,
-                "{}",
-                output::line(Status::Missing, "no hooks detected")
-            )
-            .unwrap();
+            rows.push(output::row(Status::Miss, "Hooks"));
         } else {
-            writeln!(
-                output,
-                "{}",
-                output::line(Status::Ok, format!("Hooks: {}", hook_sources.join(", ")))
-            )
-            .unwrap();
+            rows.push(output::row(Status::Ok, "Hooks").value(hook_sources.join(", ")));
         }
+
+        output::section(output, "Workflow", &rows);
     }
 
     fn render_github(&self, output: &mut String) {
-        writeln!(output, "GitHub").unwrap();
-
         if !self.github.github_dir {
-            writeln!(
+            output::section(
                 output,
-                "{}",
-                output::line(Status::Missing, ".github directory not found")
-            )
-            .unwrap();
+                "GitHub",
+                &[output::row(Status::Miss, ".github/").value("not found")],
+            );
             return;
         }
 
-        writeln!(
-            output,
-            "{}",
-            output::line(Status::Ok, ".github directory found")
-        )
-        .unwrap();
-        render_file_status(
-            output,
-            self.github.workflows_dir,
-            ".github/workflows found",
-            ".github/workflows not found",
-        );
-        render_file_status(
-            output,
-            self.github.pull_request_template,
-            ".github/pull_request_template.md found",
-            ".github/pull_request_template.md not found",
-        );
-        render_file_status(
-            output,
-            self.github.issue_template_dir,
-            ".github/ISSUE_TEMPLATE found",
-            ".github/ISSUE_TEMPLATE not found",
-        );
-        render_file_status(
-            output,
-            self.github.codeowners,
-            ".github/CODEOWNERS found",
-            ".github/CODEOWNERS not found",
-        );
-        render_file_status(
-            output,
-            self.github.dependabot_yml,
-            ".github/dependabot.yml found",
-            ".github/dependabot.yml not found",
-        );
+        let rows = [
+            output::row(Status::Ok, ".github/"),
+            file_row(self.github.workflows_dir, "workflows/"),
+            file_row(
+                self.github.pull_request_template,
+                "pull_request_template.md",
+            ),
+            file_row(self.github.issue_template_dir, "ISSUE_TEMPLATE/"),
+            file_row(self.github.codeowners, "CODEOWNERS"),
+            file_row(self.github.dependabot_yml, "dependabot.yml"),
+        ];
+        output::section(output, "GitHub", &rows);
     }
 
     fn render_next_steps(&self, output: &mut String) {
@@ -217,10 +140,7 @@ impl ScanReport {
             writeln!(
                 output,
                 "{}",
-                output::line(
-                    Status::Step,
-                    "Run `koba init` to create a workflow contract"
-                )
+                output::next_step("Run `koba init` to create a workflow contract")
             )
             .unwrap();
         }
@@ -232,7 +152,7 @@ impl ScanReport {
             writeln!(
                 output,
                 "{}",
-                output::line(Status::Step, "Add a pre-commit check for formatting/tests")
+                output::next_step("Add a pre-commit check for formatting/tests")
             )
             .unwrap();
         }
@@ -245,35 +165,22 @@ impl ScanReport {
             writeln!(
                 output,
                 "{}",
-                output::line(
-                    Status::Step,
-                    "Review scan findings before applying workflow changes"
-                )
+                output::next_step("Review scan findings before applying workflow changes")
             )
             .unwrap();
         }
     }
 }
 
-fn render_file_status(output: &mut String, present: bool, found: &str, missing: &str) {
-    let status = if present { Status::Ok } else { Status::Missing };
-    let text = if present { found } else { missing };
-    writeln!(output, "{}", output::line(status, text)).unwrap();
+fn file_row(present: bool, label: &str) -> StatusRow {
+    output::row(if present { Status::Ok } else { Status::Miss }, label)
 }
 
-fn render_config_status(output: &mut String, present: bool, configured: &str) {
+fn config_row(present: bool, label: &str) -> StatusRow {
     if present {
-        writeln!(output, "{}", output::line(Status::Ok, configured)).unwrap();
+        output::row(Status::Ok, label)
     } else {
-        writeln!(
-            output,
-            "{}",
-            output::line(
-                Status::Warning,
-                configured.replace("configured", "not configured")
-            )
-        )
-        .unwrap();
+        output::row(Status::Warn, label).value("not configured")
     }
 }
 
@@ -314,9 +221,9 @@ mod tests {
 
         let rendered = report.render();
 
-        assert!(rendered.contains("Cargo.toml found"));
-        assert!(rendered.contains(".github/pull_request_template.md found"));
-        assert!(rendered.contains("Git user.email not configured"));
+        assert!(rendered.contains("Cargo.toml"));
+        assert!(rendered.contains("pull_request_template.md"));
+        assert!(rendered.contains("Git user.email  not configured"));
     }
 
     #[test]
@@ -352,7 +259,7 @@ mod tests {
 
         let rendered = report.render();
 
-        assert!(rendered.contains("Git repository not detected"));
+        assert!(rendered.contains("Git repository  not detected"));
         assert!(!rendered.contains("Git user.name"));
         assert!(!rendered.contains("Git user.email"));
         assert!(!rendered.contains("Remote origin not configured"));

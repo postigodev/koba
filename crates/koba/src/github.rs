@@ -62,9 +62,9 @@ pub fn run(cwd: PathBuf, command: GithubCommand) -> Result<(), String> {
             Ok(())
         }
         Err(error) => {
-            println!("Koba github template pr");
+            println!("Koba GitHub template");
             println!();
-            println!("{}", output::line(Status::Missing, &error));
+            println!("{}", output::line(Status::Error, &error));
             Err(error)
         }
     }
@@ -145,7 +145,7 @@ fn render_outcome(outcome: &TemplateOutcome) -> String {
         TemplateOutcome::Applied(plan) => (plan, true),
     };
 
-    writeln!(output, "Koba github template pr").unwrap();
+    writeln!(output, "Koba GitHub template").unwrap();
     writeln!(output).unwrap();
 
     if plan.exists {
@@ -153,12 +153,15 @@ fn render_outcome(outcome: &TemplateOutcome) -> String {
             output,
             "{}",
             output::line(
-                Status::Warning,
-                format!(
-                    "{} already exists; refusing to overwrite",
-                    plan.path.display()
-                )
+                Status::Refuse,
+                format!("{} already exists", plan.path.display())
             )
+        )
+        .unwrap();
+        writeln!(
+            output,
+            "{}",
+            output::next_step("Existing files are never overwritten")
         )
         .unwrap();
         return output;
@@ -168,37 +171,22 @@ fn render_outcome(outcome: &TemplateOutcome) -> String {
         writeln!(
             output,
             "{}",
-            output::line(Status::Ok, format!("Wrote {}", plan.path.display()))
+            output::line(Status::Write, plan.path.display().to_string())
         )
         .unwrap();
     } else {
         writeln!(
             output,
             "{}",
-            output::line(Status::Step, "Preview only; no files were written")
-        )
-        .unwrap();
-        writeln!(
-            output,
-            "{}",
-            output::line(Status::Step, format!("Would write {}", plan.path.display()))
+            output::line(Status::Plan, plan.path.display().to_string())
         )
         .unwrap();
     }
 
     writeln!(output).unwrap();
-    writeln!(output, "Contents").unwrap();
-    writeln!(output, "{}", indent_contents(&plan.contents)).unwrap();
+    output::content_block(&mut output, "Template preview", &plan.contents);
 
     output
-}
-
-fn indent_contents(contents: &str) -> String {
-    contents
-        .lines()
-        .map(|line| format!("    {line}"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 #[cfg(test)]

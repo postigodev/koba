@@ -39,8 +39,8 @@ impl Severity {
     fn status(&self) -> Status {
         match self {
             Severity::Ok => Status::Ok,
-            Severity::Warning => Status::Warning,
-            Severity::Error => Status::Missing,
+            Severity::Warning => Status::Warn,
+            Severity::Error => Status::Error,
         }
     }
 }
@@ -133,14 +133,11 @@ pub fn render(diagnostics: &[Diagnostic]) -> String {
         writeln!(output).unwrap();
         writeln!(output, "{}", section.title()).unwrap();
 
-        for diagnostic in section_diagnostics {
-            writeln!(
-                output,
-                "{}",
-                output::line(diagnostic.severity.status(), &diagnostic.message)
-            )
-            .unwrap();
-        }
+        let rows = section_diagnostics
+            .iter()
+            .map(|diagnostic| output::row(diagnostic.severity.status(), &diagnostic.message))
+            .collect::<Vec<_>>();
+        output.push_str(&output::render_rows(&rows));
     }
 
     let recommendations: Vec<_> = diagnostics
@@ -153,7 +150,7 @@ pub fn render(diagnostics: &[Diagnostic]) -> String {
         writeln!(output, "Next steps").unwrap();
 
         for recommendation in recommendations {
-            writeln!(output, "{}", output::line(Status::Step, recommendation)).unwrap();
+            writeln!(output, "{}", output::next_step(recommendation)).unwrap();
         }
     }
 

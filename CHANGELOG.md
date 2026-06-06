@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v0.1.2 - 2026-06-06
+
+- Improved repository-wide terminal output consistency and legibility.
+- Replaced Unicode-only status glyphs with ASCII status badges for cross-platform readability.
+- Added aligned diagnostic and planning rows with section-local column widths.
+- Clarified preview, execution, commit suggestion, and PR draft output structure.
+- Preserved existing product behavior, safety rules, generated file contents, and exit-code semantics.
+
 ## v0.1.1 - 2026-06-06
 
 - Clarified `suggest-commit` help text to describe working tree changes.

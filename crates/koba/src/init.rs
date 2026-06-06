@@ -16,9 +16,18 @@ pub struct InitOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InitOutcome {
-    Preview { yaml: String },
-    Applied { path: PathBuf, yaml: String },
-    RefusedExisting { path: PathBuf },
+    Preview {
+        profile: Profile,
+        yaml: String,
+    },
+    Applied {
+        profile: Profile,
+        path: PathBuf,
+        yaml: String,
+    },
+    RefusedExisting {
+        path: PathBuf,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,40 +124,46 @@ impl WorkflowContract {
 
 pub fn run(cwd: PathBuf, options: InitOptions) -> Result<(), String> {
     match execute(&cwd, options)? {
-        InitOutcome::Preview { yaml } => {
-            println!("Koba init");
-            println!();
-            println!(
+        InitOutcome::Preview { profile, yaml } => {
+            let mut output_text = String::new();
+            writeln!(output_text, "Koba init").unwrap();
+            writeln!(output_text).unwrap();
+            output_text.push_str(&output::render_rows(&[
+                output::row(Status::Ok, "Profile").value(profile.name()),
+                output::row(Status::Plan, "Target").value("koba.yml"),
+                output::row(Status::Plan, "Mode").value("preview"),
+            ]));
+            writeln!(output_text).unwrap();
+            output::content_block(&mut output_text, "Proposed workflow contract", &yaml);
+            writeln!(output_text).unwrap();
+            writeln!(output_text, "Next step").unwrap();
+            writeln!(
+                output_text,
                 "{}",
-                output::line(Status::Step, "Preview only; no files were written")
-            );
-            println!();
-            print!("{yaml}");
+                output::next_step("Run `koba init --apply` to write the file")
+            )
+            .unwrap();
+            print!("{output_text}");
         }
         InitOutcome::Applied { path, .. } => {
             println!("Koba init");
             println!();
             println!(
                 "{}",
-                output::line(Status::Ok, format!("Wrote {}", path.display()))
+                output::line(Status::Write, path.display().to_string())
             );
+            println!("{}", output::line(Status::Ok, "Workflow contract created"));
         }
         InitOutcome::RefusedExisting { path } => {
             println!("Koba init");
             println!();
             println!(
                 "{}",
-                output::line(
-                    Status::Warning,
-                    format!("{} already exists; refusing to overwrite", path.display())
-                )
+                output::line(Status::Refuse, format!("{} already exists", path.display()))
             );
             println!(
                 "{}",
-                output::line(
-                    Status::Step,
-                    "Review the existing koba.yml before changing it"
-                )
+                output::next_step("Existing files are never overwritten")
             );
         }
     }
@@ -158,11 +173,12 @@ pub fn run(cwd: PathBuf, options: InitOptions) -> Result<(), String> {
 
 pub fn execute(cwd: &Path, options: InitOptions) -> Result<InitOutcome, String> {
     let workflow = repo::discover(cwd, None).workflow;
-    let yaml = WorkflowContract::from_profile(select_profile(&workflow)).render_yaml();
+    let profile = select_profile(&workflow);
+    let yaml = WorkflowContract::from_profile(profile).render_yaml();
     let path = cwd.join("koba.yml");
 
     if !options.apply {
-        return Ok(InitOutcome::Preview { yaml });
+        return Ok(InitOutcome::Preview { profile, yaml });
     }
 
     if path.exists() {
@@ -171,7 +187,11 @@ pub fn execute(cwd: &Path, options: InitOptions) -> Result<InitOutcome, String> 
 
     fs::write(&path, &yaml)
         .map_err(|error| format!("failed to write {}: {error}", path.display()))?;
-    Ok(InitOutcome::Applied { path, yaml })
+    Ok(InitOutcome::Applied {
+        profile,
+        path,
+        yaml,
+    })
 }
 
 pub fn select_profile(workflow: &WorkflowFiles) -> Profile {

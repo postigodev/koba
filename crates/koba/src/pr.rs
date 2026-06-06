@@ -44,9 +44,9 @@ pub fn run(cwd: PathBuf, options: PrOptions) -> Result<(), String> {
             Ok(())
         }
         Err(error) => {
-            println!("Koba pr");
+            println!("Koba PR draft");
             println!();
-            println!("{}", output::line(Status::Missing, &error));
+            println!("{}", output::line(Status::Error, &error));
             Err(error)
         }
     }
@@ -264,70 +264,66 @@ fn render_outcome(outcome: &PrOutcome) -> String {
         PrOutcome::Applied { draft, plan } => (draft, plan, true),
     };
 
-    writeln!(output, "Koba pr").unwrap();
+    writeln!(output, "Koba PR draft").unwrap();
     writeln!(output).unwrap();
-    writeln!(output, "Title").unwrap();
-    writeln!(output, "{}", output::line(Status::Ok, &draft.title)).unwrap();
-    writeln!(output).unwrap();
-    writeln!(output, "Source notes").unwrap();
+
+    writeln!(output, "Git context").unwrap();
     for note in &draft.source_notes {
-        writeln!(output, "{}", output::line(Status::Step, note)).unwrap();
+        let status = if note.contains("uncertain") {
+            Status::Warn
+        } else {
+            Status::Ok
+        };
+        writeln!(output, "{}", output::line(status, note)).unwrap();
     }
     writeln!(output).unwrap();
 
+    writeln!(output, "Suggested title").unwrap();
+    writeln!(output, "  {}", draft.title).unwrap();
+    writeln!(output).unwrap();
+
+    output::content_block(&mut output, "Body preview", &draft.body);
+    writeln!(output).unwrap();
+
+    writeln!(output, "Apply target").unwrap();
     if plan.exists {
         writeln!(
             output,
             "{}",
             output::line(
-                Status::Warning,
-                format!(
-                    "{} already exists; refusing to overwrite",
-                    plan.path.display()
-                )
+                Status::Refuse,
+                format!("{} already exists", plan.path.display())
             )
+        )
+        .unwrap();
+        writeln!(
+            output,
+            "{}",
+            output::next_step("Existing files are never overwritten")
         )
         .unwrap();
     } else if applied {
         writeln!(
             output,
             "{}",
-            output::line(Status::Ok, format!("Wrote {}", plan.path.display()))
+            output::line(Status::Write, plan.path.display().to_string())
         )
         .unwrap();
     } else {
         writeln!(
             output,
             "{}",
-            output::line(Status::Step, "Preview only; no files were written")
-        )
-        .unwrap();
-        writeln!(
-            output,
-            "{}",
-            output::line(Status::Step, format!("Would write {}", plan.path.display()))
+            output::line(Status::Plan, plan.path.display().to_string())
         )
         .unwrap();
     }
-
-    writeln!(output).unwrap();
-    writeln!(output, "Body").unwrap();
-    writeln!(output, "{}", indent_contents(&draft.body)).unwrap();
     writeln!(output).unwrap();
     writeln!(output, "Recommended next steps").unwrap();
     for command in &draft.recommended_commands {
-        writeln!(output, "{}", output::line(Status::Step, command)).unwrap();
+        writeln!(output, "{}", output::next_step(command)).unwrap();
     }
 
     output
-}
-
-fn indent_contents(contents: &str) -> String {
-    contents
-        .lines()
-        .map(|line| format!("    {line}"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 #[cfg(test)]

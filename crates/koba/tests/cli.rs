@@ -61,7 +61,9 @@ fn cli_init_preview_does_not_write_koba_yml() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("profile: rust-cli"));
-    assert!(stdout.contains("Preview only"));
+    assert!(stdout.contains("[plan]"));
+    assert!(stdout.contains("Mode"));
+    assert!(stdout.contains("preview"));
 }
 
 #[test]
@@ -99,7 +101,8 @@ fn cli_init_apply_refuses_to_overwrite_koba_yml() {
     assert_eq!(contents, "existing: true\n");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("refusing to overwrite"));
+    assert!(stdout.contains("[refuse]"));
+    assert!(stdout.contains("already exists"));
 }
 
 #[test]
@@ -132,8 +135,9 @@ checks:
     assert!(!marker.exists());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Koba run pre-commit"));
-    assert!(stdout.contains("Dry run"));
+    assert!(stdout.contains("Koba run"));
+    assert!(stdout.contains("Stage: pre-commit"));
+    assert!(stdout.contains("[plan]"));
     assert!(stdout.contains("echo changed"));
 }
 
@@ -168,7 +172,7 @@ fn cli_hooks_install_native_dry_run_previews_without_writing() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Koba hooks install"));
-    assert!(stdout.contains("Would write"));
+    assert!(stdout.contains("[plan]"));
     assert!(stdout.contains("koba run pre-commit"));
 }
 
@@ -194,8 +198,8 @@ fn cli_github_template_pr_dry_run_previews_without_writing() {
         .exists());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Koba github template pr"));
-    assert!(stdout.contains("Would write"));
+    assert!(stdout.contains("Koba GitHub template"));
+    assert!(stdout.contains("[plan]"));
     assert!(stdout.contains("## Summary"));
     assert!(stdout.contains("## Notes for reviewer"));
 }
@@ -280,9 +284,9 @@ fn cli_pr_dry_run_previews_without_writing() {
     assert!(!fixture.path().join(".koba/pr-body.md").exists());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Koba pr"));
-    assert!(stdout.contains("Title"));
-    assert!(stdout.contains("Body"));
+    assert!(stdout.contains("Koba PR draft"));
+    assert!(stdout.contains("Suggested title"));
+    assert!(stdout.contains("Body preview"));
     assert!(stdout.contains("docs/change.md"));
 }
 
