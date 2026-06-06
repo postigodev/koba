@@ -6,6 +6,13 @@
   Local-first Git workflow configuration for real repositories.
 </p>
 
+<p align="center">
+  <a href="https://github.com/postigodev/koba/actions/workflows/ci.yml"><img src="https://github.com/postigodev/koba/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/postigodev/koba/releases"><img src="https://img.shields.io/github/v/release/postigodev/koba?sort=semver" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/postigodev/koba" alt="License"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-stable-orange?logo=rust" alt="Rust"></a>
+</p>
+
 # Koba
 
 Koba is a local-first Git workflow configurator for real repositories. It helps you inspect workflow infrastructure, draft a repo workflow contract, run configured checks, connect hooks, generate PR templates, and prepare commit/PR text without taking over Git.
