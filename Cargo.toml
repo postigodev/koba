@@ -12,3 +12,25 @@ homepage = "https://github.com/postigodev/koba"
 clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_yml = "0.0.12"
+
+[profile.dist]
+inherits = "release"
+lto = "thin"
+
+# Config for 'dist'
+[workspace.metadata.dist]
+# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.32.0"
+packages = ["koba"]
+# The installers to generate for each app
+installers = []
+# Target platforms to build apps for (Rust target-triple syntax)
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+# CI backends to support
+ci = "github"
+# Where to host releases
+hosting = "github"
+# Only version tags such as v0.1.0 should trigger release builds
+tag-namespace = "v"
+# Keep the release workflow separate from regular pull request CI
+pr-run-mode = "skip"

@@ -42,6 +42,8 @@ Or run it directly from the workspace:
 cargo run -p koba -- scan
 ```
 
+Prebuilt GitHub Release binaries are produced from version tags once releases are cut. See [docs/distribution.md](docs/distribution.md) for the staged distribution plan.
+
 ## Quickstart
 
 From a Git repository:
