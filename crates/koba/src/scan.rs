@@ -98,8 +98,10 @@ impl ScanReport {
             .unwrap();
         }
 
-        render_config_status(output, self.git.has_user_name, "Git user.name configured");
-        render_config_status(output, self.git.has_user_email, "Git user.email configured");
+        if self.git.inside_repo {
+            render_config_status(output, self.git.has_user_name, "Git user.name configured");
+            render_config_status(output, self.git.has_user_email, "Git user.email configured");
+        }
     }
 
     fn render_workflow(&self, output: &mut String) {
@@ -315,5 +317,44 @@ mod tests {
         assert!(rendered.contains("Cargo.toml found"));
         assert!(rendered.contains(".github/pull_request_template.md found"));
         assert!(rendered.contains("Git user.email not configured"));
+    }
+
+    #[test]
+    fn render_outside_git_repo_omits_git_identity_warnings() {
+        let report = ScanReport {
+            git: git::GitInfo {
+                inside_repo: false,
+                root: None,
+                git_dir: None,
+                branch: None,
+                has_origin: false,
+                has_user_name: false,
+                has_user_email: false,
+            },
+            workflow: WorkflowFiles {
+                koba_yml: false,
+                package_json: false,
+                cargo_toml: false,
+                pyproject_toml: false,
+                husky_dir: false,
+                native_pre_commit: false,
+                native_pre_push: false,
+            },
+            github: GithubFiles {
+                github_dir: false,
+                workflows_dir: false,
+                pull_request_template: false,
+                issue_template_dir: false,
+                codeowners: false,
+                dependabot_yml: false,
+            },
+        };
+
+        let rendered = report.render();
+
+        assert!(rendered.contains("Git repository not detected"));
+        assert!(!rendered.contains("Git user.name"));
+        assert!(!rendered.contains("Git user.email"));
+        assert!(!rendered.contains("Remote origin not configured"));
     }
 }

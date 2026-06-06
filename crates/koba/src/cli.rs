@@ -44,7 +44,7 @@ enum Command {
         #[command(subcommand)]
         command: GithubCommand,
     },
-    /// Suggest a commit command from staged changes.
+    /// Suggest a commit command from working tree changes.
     SuggestCommit,
     /// Inspect or prepare pull request workflow assets.
     Pr {

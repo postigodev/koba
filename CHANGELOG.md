@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.1.1 - 2026-06-06
+
+- Clarified `suggest-commit` help text to describe working tree changes.
+- Improved `scan` output outside Git repositories by omitting Git identity warnings.
+
 ## v0.1.0 - 2026-06-06
 
 - Added read-only repository scanning with `koba scan`.
