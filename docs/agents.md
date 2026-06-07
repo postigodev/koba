@@ -18,6 +18,12 @@ Use this precedence:
 
 ## Install With The Skills CLI
 
+Koba is discoverable on skills.sh at:
+
+```text
+https://skills.sh/postigodev/koba
+```
+
 List available skills without installing:
 
 ```sh
@@ -137,20 +143,35 @@ Should not automatically trigger:
 
 ## skills.sh Discoverability
 
-The skill becomes discoverable through the public repository and the `skills` CLI flow:
+Koba is published and discoverable through skills.sh and the `skills` CLI.
 
-1. Push `skills/koba/` to the public `postigodev/koba` repository.
-2. Verify remote discovery:
+Repository page:
+
+```text
+https://skills.sh/postigodev/koba
+```
+
+Official badge:
+
+```markdown
+[![skills.sh](https://skills.sh/b/postigodev/koba)](https://skills.sh/postigodev/koba)
+```
+
+Remote discovery:
 
 ```sh
 npx skills add postigodev/koba --list
 ```
 
-3. Install the remote skill at least once with the `skills` CLI.
-4. Confirm whether the repository or skill appears on skills.sh.
-5. Only after the page exists, add the official badge using the documented badge format.
+Install:
 
-Do not assume skills.sh listing is immediate. The skills.sh docs describe ranking through anonymous install telemetry from the `skills` CLI.
+```sh
+npx skills add postigodev/koba --skill koba --global --agent codex --agent claude-code --yes
+```
+
+The repository README now includes the official skills.sh badge. The skills.sh docs describe ranking through anonymous install telemetry from the `skills` CLI.
+
+When adding new skills later, repeat remote discovery before documenting them as available.
 
 ## Verified CLI Notes
 

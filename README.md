@@ -11,6 +11,7 @@
   <a href="https://github.com/postigodev/koba/releases"><img src="https://img.shields.io/github/v/release/postigodev/koba?sort=semver" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/postigodev/koba" alt="License"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-stable-orange?logo=rust" alt="Rust"></a>
+  <a href="https://skills.sh/postigodev/koba"><img src="https://skills.sh/b/postigodev/koba" alt="skills.sh"></a>
 </p>
 
 # Koba
@@ -87,7 +88,7 @@ The default mode for generators is preview-only. Commands such as `init`, `hooks
 
 ## Agent Skill
 
-Koba includes a portable Agent Skill that teaches coding agents such as Codex and Claude Code how to use the `koba` CLI safely for repository inspection, surgical commits, and PR preparation.
+Koba includes a [skills.sh-discoverable Agent Skill](https://skills.sh/postigodev/koba) that teaches coding agents such as Codex and Claude Code how to use the `koba` CLI safely for repository inspection, surgical commits, and PR preparation.
 
 ```sh
 npx skills add postigodev/koba --skill koba --global --agent codex --agent claude-code --yes
@@ -99,7 +100,7 @@ Example prompt:
 Prepare a surgical commit using Koba, but do not stage or commit until I approve.
 ```
 
-See [docs/agents.md](docs/agents.md) for installation, approval boundaries, and skills.sh discovery notes.
+See [docs/agents.md](docs/agents.md) for installation, approval boundaries, and skills.sh details.
 
 ## Commands
 
