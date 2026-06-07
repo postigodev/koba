@@ -85,6 +85,22 @@ koba pr --dry-run
 
 The default mode for generators is preview-only. Commands such as `init`, `hooks install`, `github template pr`, and `pr` only write files when passed `--apply`, and they refuse to overwrite existing user files.
 
+## Agent Skill
+
+Koba includes a portable Agent Skill that teaches coding agents such as Codex and Claude Code how to use the `koba` CLI safely for repository inspection, surgical commits, and PR preparation.
+
+```sh
+npx skills add postigodev/koba --skill koba --global --agent codex --agent claude-code --yes
+```
+
+Example prompt:
+
+```text
+Prepare a surgical commit using Koba, but do not stage or commit until I approve.
+```
+
+See [docs/agents.md](docs/agents.md) for installation, approval boundaries, and skills.sh discovery notes.
+
 ## Commands
 
 | Command | What it does | Writes files? |
