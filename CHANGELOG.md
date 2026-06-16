@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## v0.1.3 - 2026-06-16
+
+### Added
+
+- Added `koba changes`, a read-only working-tree review command that summarizes changed, staged, unstaged, and untracked files.
+- Added commit group planning for mixed working trees so Koba can recommend splitting unrelated changes before staging.
+- Added check recommendations based on changed file types, including Rust, docs, skills, Scoop manifests, GitHub Actions, Node/TypeScript, and Python projects.
+
+### Improved
+
+- Improved Conventional Commit suggestions with sharper path-based scopes for agent skills, Scoop packaging, GitHub workflows, and Koba internals.
+- Updated the Koba Agent Skill to prefer `koba changes` for working-tree review, commit preparation, and check planning.
+- Documented the Koba source-workspace fallback for agents when the global `koba` executable is not on `PATH`.
+
+### Safety
+
+- `koba changes` is fully read-only and does not stage, commit, push, apply changes, or rewrite history.
+
 ## v0.1.2 - 2026-06-06
 
 - Improved repository-wide terminal output consistency and legibility.
