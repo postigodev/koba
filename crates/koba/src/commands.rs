@@ -13,6 +13,10 @@ pub fn doctor() -> Result<(), String> {
     crate::doctor::run(std::env::current_dir().map_err(|error| error.to_string())?)
 }
 
+pub fn changes() -> Result<(), String> {
+    crate::changes::run(std::env::current_dir().map_err(|error| error.to_string())?)
+}
+
 pub fn run(stage: crate::run_checks::Stage, dry_run: bool) -> Result<(), String> {
     crate::run_checks::run(
         std::env::current_dir().map_err(|error| error.to_string())?,

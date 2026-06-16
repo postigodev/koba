@@ -60,6 +60,14 @@ Use brainstorming/planning skills when:
 * Comparing architecture options.
 * Deciding whether a feature belongs in Koba core, an adapter, or later roadmap.
 
+Use koba skill when:
+
+* It's useful to suggest a surgical commit flow using focused commands
+
+Use create-readme skill when:
+
+* You are updating the README.md
+
 ## Token Efficiency
 
 * Inspect only files relevant to the requested task.
@@ -165,6 +173,6 @@ When finished, report:
 5. Suggested next step.
 
 Optional:
-6. When useful, suggest a surgical commit flow using focused commands and the convention type(scope): description.
+6. When useful, suggest a surgical commit flow using focused commands and the convention type(scope): description. Using the skill koba
 
 Keep summaries concise but specific.

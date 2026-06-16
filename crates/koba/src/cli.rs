@@ -26,6 +26,8 @@ enum Command {
     Scan,
     /// Diagnose workflow issues and unsafe assumptions.
     Doctor,
+    /// Review the current working tree and suggest commit groups/checks.
+    Changes,
     /// Run a named workflow check.
     Run {
         /// Stage to run.
@@ -64,6 +66,7 @@ pub fn run() -> Result<(), String> {
         Command::Init { apply } => commands::init(apply),
         Command::Scan => commands::scan(),
         Command::Doctor => commands::doctor(),
+        Command::Changes => commands::changes(),
         Command::Run { stage, dry_run } => commands::run(stage, dry_run),
         Command::Hooks { command } => match command {
             HooksCommand::Install {

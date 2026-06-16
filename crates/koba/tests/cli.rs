@@ -228,6 +228,30 @@ fn cli_suggest_commit_reports_clean_git_tree() {
 }
 
 #[test]
+fn cli_changes_reports_clean_git_tree() {
+    let fixture = TempTree::new();
+    fixture.git_init();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_koba"))
+        .arg("changes")
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run koba binary");
+
+    assert!(
+        output.status.success(),
+        "expected success, got status {:?}, stderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Koba changes"));
+    assert!(stdout.contains("Working tree"));
+    assert!(stdout.contains("working tree is clean"));
+}
+
+#[test]
 fn cli_suggest_commit_recommends_commands_without_staging() {
     let fixture = TempTree::new();
     fixture.git_init();
