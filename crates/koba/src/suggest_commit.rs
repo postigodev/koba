@@ -138,6 +138,10 @@ fn parse_porcelain_line(line: &str) -> Option<ChangedFile> {
 }
 
 fn suggest_type(files: &[ChangedFile]) -> &'static str {
+    if files.iter().all(|file| is_github_workflow_file(&file.path)) {
+        return "ci";
+    }
+
     if files.iter().all(|file| is_docs_file(&file.path)) {
         return "docs";
     }
@@ -179,18 +183,25 @@ fn suggest_scope(files: &[ChangedFile]) -> (Option<String>, bool) {
     (Some(scope.to_owned()), counts.len() > 1)
 }
 
-fn scope_priority() -> [&'static str; 9] {
+fn scope_priority() -> [&'static str; 12] {
     [
-        "github", "hooks", "run", "init", "doctor", "scan", "repo", "config", "cli",
+        "agents", "skill", "scoop", "github", "hooks", "run", "init", "doctor", "scan", "repo",
+        "config", "cli",
     ]
 }
 
 fn suggest_description(commit_type: &str, scope: Option<&str>) -> &'static str {
     match (commit_type, scope) {
+        ("ci", Some("github")) => "update GitHub Actions workflow",
+        ("ci", _) => "update CI workflow",
+        ("docs", Some("agents")) => "update agent documentation",
+        ("docs", Some("skill")) => "update skill documentation",
+        ("docs", Some("github")) => "update GitHub documentation",
         ("docs", Some("product")) => "update product documentation",
         ("docs", _) => "update documentation",
         ("test", Some("scan")) => "cover workflow file discovery",
         ("test", _) => "add coverage",
+        ("feat", Some("skill")) => "update agent skill",
         ("feat", Some("github")) => "add PR template generation",
         ("feat", Some("hooks")) => "install native and husky hooks",
         ("feat", Some("run")) => "execute configured checks",
@@ -199,6 +210,7 @@ fn suggest_description(commit_type: &str, scope: Option<&str>) -> &'static str {
         ("feat", Some("scan")) => "scan workflow files",
         ("feat", Some("cli")) => "update command surface",
         ("feat", _) => "update workflow tooling",
+        ("chore", Some("scoop")) => "update Scoop packaging",
         ("chore", Some("config")) => "update configuration",
         ("chore", _) => "update project setup",
         _ => "update workflow tooling",
@@ -208,6 +220,22 @@ fn suggest_description(commit_type: &str, scope: Option<&str>) -> &'static str {
 fn scope_for_path(path: &str) -> Option<&'static str> {
     let normalized = path.replace('\\', "/").to_ascii_lowercase();
     let file_name = normalized.rsplit('/').next().unwrap_or(normalized.as_str());
+
+    if normalized == "docs/agents.md" {
+        return Some("agents");
+    }
+
+    if normalized.starts_with("skills/koba/") {
+        return Some("skill");
+    }
+
+    if normalized.starts_with("packaging/scoop/") {
+        return Some("scoop");
+    }
+
+    if is_github_workflow_file(&normalized) || normalized == ".github/pull_request_template.md" {
+        return Some("github");
+    }
 
     if normalized.contains("docs/product") {
         return Some("product");
@@ -231,6 +259,7 @@ fn scope_for_path(path: &str) -> Option<&'static str> {
 fn is_docs_file(path: &str) -> bool {
     let path = path.replace('\\', "/").to_ascii_lowercase();
     path.starts_with("docs/")
+        || path == ".github/pull_request_template.md"
         || path.ends_with(".md")
         || path.ends_with(".mdx")
         || path.ends_with(".rst")
@@ -264,7 +293,7 @@ fn is_chore_file(path: &str) -> bool {
             | ".gitattributes"
             | "rust-toolchain.toml"
             | "rustfmt.toml"
-    ) || path.starts_with(".github/")
+    ) || (path.starts_with(".github/") && path != ".github/pull_request_template.md")
         || path.ends_with(".yml")
         || path.ends_with(".yaml")
         || path.ends_with(".toml")
@@ -278,7 +307,14 @@ fn is_feature_signal(file: &ChangedFile) -> bool {
 
     file_name == "cli.rs"
         || path.contains("/src/")
+        || path.starts_with("skills/koba/")
         || (added && (path.ends_with(".rs") || path.ends_with(".ts") || path.ends_with(".tsx")))
+}
+
+fn is_github_workflow_file(path: &str) -> bool {
+    path.replace('\\', "/")
+        .to_ascii_lowercase()
+        .starts_with(".github/workflows/")
 }
 
 fn quote_paths(paths: &[&str]) -> String {
@@ -360,5 +396,63 @@ mod tests {
     #[test]
     fn clean_file_list_has_no_suggestion() {
         assert!(suggest(&[]).is_none());
+    }
+
+    #[test]
+    fn suggests_agent_docs_scope_for_agent_documentation() {
+        let suggestion = suggest(&[file("M", "README.md"), file("M", "docs/agents.md")]).unwrap();
+
+        assert_eq!(
+            suggestion.message,
+            "docs(agents): update agent documentation"
+        );
+    }
+
+    #[test]
+    fn suggests_skill_docs_scope_for_skill_markdown() {
+        let suggestion = suggest(&[
+            file("M", "skills/koba/SKILL.md"),
+            file("M", "skills/koba/references/workflows.md"),
+        ])
+        .unwrap();
+
+        assert_eq!(
+            suggestion.message,
+            "docs(skill): update skill documentation"
+        );
+    }
+
+    #[test]
+    fn suggests_skill_feature_scope_for_non_docs_skill_files() {
+        let suggestion = suggest(&[file("A", "skills/koba/scripts/check.ps1")]).unwrap();
+
+        assert_eq!(suggestion.message, "feat(skill): update agent skill");
+    }
+
+    #[test]
+    fn suggests_scoop_scope_for_scoop_packaging() {
+        let suggestion = suggest(&[file("M", "packaging/scoop/bucket/koba.json")]).unwrap();
+
+        assert_eq!(suggestion.message, "chore(scoop): update Scoop packaging");
+    }
+
+    #[test]
+    fn suggests_github_ci_scope_for_workflows() {
+        let suggestion = suggest(&[file("M", ".github/workflows/ci.yml")]).unwrap();
+
+        assert_eq!(
+            suggestion.message,
+            "ci(github): update GitHub Actions workflow"
+        );
+    }
+
+    #[test]
+    fn suggests_github_docs_scope_for_pr_template() {
+        let suggestion = suggest(&[file("M", ".github/pull_request_template.md")]).unwrap();
+
+        assert_eq!(
+            suggestion.message,
+            "docs(github): update GitHub documentation"
+        );
     }
 }
