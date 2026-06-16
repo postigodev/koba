@@ -9,6 +9,13 @@ The Koba Agent Skill teaches coding agents how to use the globally installed `ko
 - `AGENTS.md` / `CLAUDE.md`: repository-specific instructions. These take precedence over Koba recommendations.
 - Future MCP server: possible later integration surface. This skill does not add MCP behavior.
 
+Current command roles:
+
+- `koba changes`: working-tree review, mixed-change detection, commit grouping, and check planning.
+- `koba suggest-commit`: focused deterministic Conventional Commit suggestion.
+- `koba pr`: pull request title/body draft preparation.
+- `koba doctor`: repository workflow health diagnostics.
+
 Use this precedence:
 
 1. Explicit current user request.
@@ -84,6 +91,7 @@ The skill allows read-oriented and preview-only Koba commands without extra appr
 ```sh
 koba scan
 koba doctor
+koba changes
 koba init
 koba run pre-commit --dry-run
 koba run pre-push --dry-run
@@ -97,6 +105,29 @@ koba pr --dry-run
 Agents must ask before `--apply`, non-dry-run configured checks, staging, committing, pushing, opening pull requests, or writing `koba.yml`, hooks, `.github/` files, or `.koba/pr-body.md`.
 
 Approval for one action does not imply approval for later actions.
+
+## Recommended Agent Workflow
+
+For current working-tree review, commit preparation, or checking whether changes are coherent, start with:
+
+```sh
+koba changes
+git status --short
+koba suggest-commit
+```
+
+Use `koba changes` for the broad plan: changed-file state, possible commit groups, mixed-change warnings, and relevant checks. Use `koba suggest-commit` for the narrower Conventional Commit message and Git command suggestion.
+
+If `koba changes` reports multiple groups, agents should not collapse them into one commit without inspecting the diffs and explaining why one commit is still coherent.
+
+For check preparation, use `koba changes` to understand recommended checks, then preview configured stages:
+
+```sh
+koba run pre-commit --dry-run
+koba run pre-push --dry-run
+```
+
+Running non-dry-run checks still requires explicit user approval unless the user already requested validation.
 
 ## Troubleshooting
 
@@ -121,12 +152,23 @@ cargo install --path crates/koba
 
 Do not let an agent silently install Koba or pretend Koba output exists.
 
+If `koba changes` is unavailable but `koba --version` works, the installed Koba may be older than the current skill workflow. Update Koba before using the `changes` workflow.
+
+Inside the Koba source workspace only, when `crates/koba/Cargo.toml` exists, an agent may explicitly state it is using the workspace binary fallback:
+
+```sh
+cargo run -q -p koba -- changes
+```
+
+Do not use this fallback in unrelated repositories.
+
 ## Trigger Matrix
 
 Should trigger:
 
 - "Review this repository's Git workflow."
 - "Prepare a surgical commit using Koba."
+- "Review whether these changes are one coherent commit."
 - "Check what will run before I push."
 - "Draft a PR from my current branch using Koba."
 - "Set up Koba hooks, but preview everything first."

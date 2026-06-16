@@ -1,6 +1,6 @@
 ---
 name: koba
-description: Use Koba to inspect Git workflow health, diagnose repository workflow infrastructure, preview checks, prepare surgical Conventional Commits, draft PRs, preview hooks, and review or initialize koba.yml. Trigger for Git workflow review, repository diagnostics, checks, commit preparation, PR preparation, hooks, or koba.yml work. Require explicit approval before --apply, non-dry-run checks, staging, committing, pushing, opening PRs, or writing files.
+description: Use Koba to inspect Git workflow health, review working-tree changes, diagnose repository workflow infrastructure, preview checks, prepare surgical Conventional Commits, draft PRs, preview hooks, and review or initialize koba.yml. Trigger for Git workflow review, repository diagnostics, changed-file review, mixed working trees, checks, commit preparation, PR preparation, hooks, or koba.yml work. Require explicit approval before --apply, non-dry-run checks, staging, committing, pushing, opening PRs, or writing files.
 ---
 
 # Koba
@@ -44,6 +44,7 @@ These commands are read-oriented or preview-only and may be run without extra ap
 ```sh
 koba scan
 koba doctor
+koba changes
 koba init
 koba run pre-commit --dry-run
 koba run pre-push --dry-run
@@ -86,6 +87,14 @@ Summarize repository status, detected project markers, workflow contract status,
 
 ## Check Preparation
 
+Start with:
+
+```sh
+koba changes
+```
+
+Use its check recommendations to understand which checks are relevant to the current working tree.
+
 Run:
 
 ```sh
@@ -93,18 +102,21 @@ koba run pre-commit --dry-run
 koba run pre-push --dry-run
 ```
 
-Explain which commands would run, which stage each command belongs to, and whether the commands appear scoped and appropriate. Only run actual checks when the user explicitly requested validation or approves after seeing the dry-run. Preserve subprocess output and report failures honestly. Never claim a check passed unless it was executed.
+Explain which commands would run, which stage each command belongs to, and whether the commands appear scoped and appropriate for the changes. Only run actual checks when the user explicitly requested validation or approves after seeing the dry-run and recommendations. Preserve subprocess output and report failures honestly. Never claim a check passed unless it was executed.
 
 ## Surgical Commit Preparation
 
 Run:
 
 ```sh
+koba changes
 git status --short
 koba suggest-commit
 ```
 
-Then inspect relevant diffs. Determine whether the proposed file grouping is coherent, challenge weak scopes or messages, and prefer one concept per commit.
+Use `koba changes` as the broad working-tree review and commit/check planner. Use `koba suggest-commit` as the focused deterministic Conventional Commit message helper.
+
+Then inspect relevant diffs. Determine whether the proposed file grouping is coherent, challenge weak scopes or messages, and prefer one concept per commit. If `koba changes` reports multiple groups, do not collapse them into one commit without inspecting the diffs and explaining why one commit is still coherent.
 
 Show the exact files, proposed Conventional Commit message, and relevant checks already run. Ask before staging or committing. Immediately before staging, rerun `git status --short`; stop if the working tree changed unexpectedly. Stage only approved files, commit only with the approved message, and never push without separate approval.
 

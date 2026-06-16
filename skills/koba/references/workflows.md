@@ -21,16 +21,23 @@ Decision points:
 ## 2. Prepare A Commit Without Executing It
 
 ```sh
+koba changes
 git status --short
 koba suggest-commit
 git diff -- <approved-file>
 ```
 
-Show the changed files, proposed Conventional Commit message, and why the grouping is or is not coherent. Stop before staging.
+Use `koba changes` for the broad working-tree plan: changed-file counts, likely commit groups, mixed-change warnings, and relevant checks. Use `koba suggest-commit` for the focused Conventional Commit suggestion. Show the changed files, proposed Conventional Commit message, and why the grouping is or is not coherent. Stop before staging.
 
 Refuse to stage if the user only asked for a suggestion.
 
 ## 3. Validate, Obtain Approval, And Commit
+
+```sh
+koba changes
+```
+
+Review the recommended checks before executing anything.
 
 ```sh
 koba run pre-commit --dry-run
@@ -145,11 +152,77 @@ If a check fails, preserve the subprocess output, report the failing command and
 ## 11. Suggestion Spans Unrelated Files
 
 ```sh
+koba changes
 git status --short
 koba suggest-commit
 git diff --stat
 ```
 
-If Koba suggests one commit for unrelated docs, source, packaging, or generated files, challenge it. Propose separate commits and ask which grouping the user wants.
+If `koba changes` reports multiple groups, treat that as the default commit boundary. If `koba suggest-commit` suggests one commit for unrelated docs, source, packaging, or generated files, challenge it. Propose separate commits and ask which grouping the user wants.
 
 Refuse to stage unrelated files under a single message unless the user explicitly approves that grouping.
+
+## 12. Clean Docs-Only Working Tree
+
+```sh
+koba changes
+git status --short
+koba suggest-commit
+```
+
+Expected interpretation:
+
+- One docs-oriented group, such as `docs(agents): update agent documentation`.
+- `git diff --check` is relevant.
+- Rust, Node, or Python test suites are not automatically required for docs-only changes.
+
+Still inspect the diff before recommending a commit. Do not stage until the user approves the exact files and message.
+
+## 13. Mixed Skill Docs And Commit Engine Source
+
+```sh
+koba changes
+git diff -- skills/koba/SKILL.md skills/koba/references/workflows.md
+git diff -- crates/koba/src/suggest_commit.rs
+koba suggest-commit
+```
+
+Expected interpretation:
+
+- Skill docs form one group, such as `docs(skill): document workspace binary fallback`.
+- Commit-suggestion source forms another group, such as `feat(commit): sharpen path-based scope inference`.
+- The working tree should be treated as mixed unless the diffs clearly prove one coherent change.
+
+Do not collapse the groups into one commit just because a single message is convenient.
+
+## 14. Rust Source Change With Recommended Checks
+
+```sh
+koba changes
+koba run pre-commit --dry-run
+koba run pre-push --dry-run
+```
+
+Expected interpretation:
+
+- Rust source changes should usually recommend `cargo fmt --check`, `cargo check`, and `cargo test`, with package scoping when Koba can detect the workspace package.
+- The dry-run output shows configured Koba checks, which may differ from the heuristic recommendations.
+
+Ask before running non-dry-run checks. Preserve output and stop on failure.
+
+## 15. `koba changes` Unavailable In Old Koba
+
+```sh
+koba --version
+koba changes
+```
+
+If `koba changes` is not recognized, report that the installed Koba version appears older than the skill workflow expects. Do not pretend the command ran.
+
+In the Koba source workspace only, and only when `crates/koba/Cargo.toml` exists, you may state that you are using the workspace binary fallback:
+
+```sh
+cargo run -q -p koba -- changes
+```
+
+Do not use this fallback in unrelated repositories. In other repositories, ask the user to update Koba before using the `changes` workflow, or fall back to manual `git status --short` and diff inspection without attributing that work to Koba.

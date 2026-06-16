@@ -31,6 +31,7 @@ Koba is built around a simple safety model: read first, recommend next, preview 
 - Run `pre-commit` and `pre-push` checks from `koba.yml`.
 - Preview or install native Git hook and Husky hook files that call `koba run`.
 - Preview or generate a GitHub pull request template.
+- Review working-tree changes and plan surgical commits.
 - Suggest Conventional Commit messages and safe Git commands.
 - Draft a local PR title/body without opening a PR.
 
@@ -80,6 +81,7 @@ koba init --apply
 koba run pre-commit --dry-run
 koba hooks install --adapter native --dry-run
 koba github template pr --dry-run
+koba changes
 koba suggest-commit
 koba pr --dry-run
 ```
@@ -88,7 +90,7 @@ The default mode for generators is preview-only. Commands such as `init`, `hooks
 
 ## Agent Skill
 
-Koba includes a [skills.sh-discoverable Agent Skill](https://skills.sh/postigodev/koba) that teaches coding agents such as Codex and Claude Code how to use the `koba` CLI safely for repository inspection, surgical commits, and PR preparation.
+Koba includes a [skills.sh-discoverable Agent Skill](https://skills.sh/postigodev/koba) that teaches coding agents such as Codex and Claude Code how to use the `koba` CLI safely for repository inspection, working-tree review, surgical commits, and PR preparation.
 
 ```sh
 npx skills add postigodev/koba --skill koba --global --agent codex --agent claude-code --yes
@@ -113,6 +115,7 @@ See [docs/agents.md](docs/agents.md) for installation, approval boundaries, and 
 | `koba run pre-commit` | Runs `checks.preCommit` from `koba.yml`. | No |
 | `koba run pre-push` | Runs `checks.prePush` from `koba.yml`. | No |
 | `koba run <stage> --dry-run` | Lists checks without executing them. | No |
+| `koba changes` | Reviews working-tree changes, suggests commit groups, and recommends checks. | No |
 | `koba hooks install --adapter native` | Previews native hook files for `.git/hooks/`. | No |
 | `koba hooks install --adapter native --apply` | Writes missing native hook files. | Yes |
 | `koba hooks install --adapter husky` | Previews Husky hook files for `.husky/`. | No |
