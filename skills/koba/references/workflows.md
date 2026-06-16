@@ -122,7 +122,19 @@ koba --version
 
 If this fails, report that Koba is not available on `PATH`. Provide installation options from the Koba README, such as Scoop on Windows or `cargo install --path crates/koba` for local development. Do not install Koba silently.
 
-## 9. Failed Configured Check
+## 9. Koba Source Workspace Fallback
+
+When `koba --version` fails but the current repository is the Koba source workspace:
+
+```sh
+test -f crates/koba/Cargo.toml
+cargo run -q -p koba -- scan
+cargo run -q -p koba -- doctor
+```
+
+State that you are using the workspace binary fallback because global `koba` is unavailable. Do not use this fallback in unrelated repositories.
+
+## 10. Failed Configured Check
 
 ```sh
 koba run pre-commit
@@ -130,7 +142,7 @@ koba run pre-commit
 
 If a check fails, preserve the subprocess output, report the failing command and exit status, and stop. Do not bypass the failure, commit anyway, or claim validation passed.
 
-## 10. Suggestion Spans Unrelated Files
+## 11. Suggestion Spans Unrelated Files
 
 ```sh
 git status --short

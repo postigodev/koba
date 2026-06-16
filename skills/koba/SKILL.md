@@ -22,6 +22,14 @@ koba --version
 
 If Koba is unavailable, report that clearly, provide installation guidance, and stop. Do not silently install Koba and do not invent Koba output.
 
+Exception: when working inside the Koba source workspace and `crates/koba/Cargo.toml` exists, you may use the workspace binary fallback:
+
+```sh
+cargo run -q -p koba -- <command>
+```
+
+State explicitly that you are using the workspace binary fallback. Do not use this fallback in unrelated repositories.
+
 Use this precedence:
 
 1. Explicit current user request.
