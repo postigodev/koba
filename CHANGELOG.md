@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## v0.1.5 - 2026-06-16
+
+### Improved
+
+- Improved `koba init` preview output when `koba.yml` already exists.
+- Clarified that `koba init --apply` refuses to overwrite existing workflow contracts.
+- Reduced manifest noise in `koba scan` for Agent Skill repositories by omitting missing `package.json`, `Cargo.toml`, and `pyproject.toml` markers when they are not relevant.
+
+### Safety
+
+- Preserved the existing no-overwrite behavior for `koba init --apply`.
+
 ## v0.1.4 - 2026-06-16
 
 ### Added
