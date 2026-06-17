@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## v0.1.4 - 2026-06-16
+
+### Added
+
+- Added first-class Agent Skill repository detection from `skills/*/SKILL.md`.
+- Added Agent Skill-aware scan output for skill slugs, references, examples, evals, smoke prompts, and README files.
+- Added `agent-skill` workflow initialization with `git diff --check` and `npx skills add . --list` as default validation checks.
+
+### Improved
+
+- Improved `doctor` so Agent Skill repositories are treated as supported projects instead of unknown custom repos.
+- Improved `suggest-commit` and `changes` for generic `skills/*/**`, `evals/**`, and `tests/smoke-prompts.md` changes.
+- Improved `changes` grouping so skill examples, evals, and smoke prompts are treated as coherent skill enhancement work.
+- Replaced Koba-specific skill docs wording with generic Agent Skill documentation messaging.
+
+### Safety
+
+- Agent Skill support remains read-only by default and does not run skill validation, stage files, commit, push, or write files unless explicitly requested through existing preview/apply flows.
+
 ## v0.1.3 - 2026-06-16
 
 ### Added
