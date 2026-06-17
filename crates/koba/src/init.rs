@@ -19,6 +19,7 @@ pub enum InitOutcome {
     Preview {
         profile: Profile,
         yaml: String,
+        target_exists: bool,
     },
     Applied {
         profile: Profile,
@@ -146,25 +147,51 @@ impl WorkflowContract {
 
 pub fn run(cwd: PathBuf, options: InitOptions) -> Result<(), String> {
     match execute(&cwd, options)? {
-        InitOutcome::Preview { profile, yaml } => {
+        InitOutcome::Preview {
+            profile,
+            yaml,
+            target_exists,
+        } => {
             let mut output_text = String::new();
             writeln!(output_text, "Koba init").unwrap();
             writeln!(output_text).unwrap();
+            let target_row = if target_exists {
+                output::row(Status::Keep, "Target").value("koba.yml already exists")
+            } else {
+                output::row(Status::Plan, "Target").value("koba.yml")
+            };
             output_text.push_str(&output::render_rows(&[
                 output::row(Status::Ok, "Profile").value(profile.name()),
-                output::row(Status::Plan, "Target").value("koba.yml"),
+                target_row,
                 output::row(Status::Plan, "Mode").value("preview"),
             ]));
             writeln!(output_text).unwrap();
             output::content_block(&mut output_text, "Proposed workflow contract", &yaml);
             writeln!(output_text).unwrap();
             writeln!(output_text, "Next step").unwrap();
-            writeln!(
-                output_text,
-                "{}",
-                output::next_step("Run `koba init --apply` to write the file")
-            )
-            .unwrap();
+            if target_exists {
+                writeln!(
+                    output_text,
+                    "{}",
+                    output::next_step(
+                        "Existing workflow contract detected; review it before replacing anything",
+                    )
+                )
+                .unwrap();
+                writeln!(
+                    output_text,
+                    "{}",
+                    output::next_step("`koba init --apply` refuses to overwrite existing files")
+                )
+                .unwrap();
+            } else {
+                writeln!(
+                    output_text,
+                    "{}",
+                    output::next_step("Run `koba init --apply` to write the file")
+                )
+                .unwrap();
+            }
             print!("{output_text}");
         }
         InitOutcome::Applied { path, .. } => {
@@ -200,7 +227,11 @@ pub fn execute(cwd: &Path, options: InitOptions) -> Result<InitOutcome, String> 
     let path = cwd.join("koba.yml");
 
     if !options.apply {
-        return Ok(InitOutcome::Preview { profile, yaml });
+        return Ok(InitOutcome::Preview {
+            profile,
+            yaml,
+            target_exists: path.exists(),
+        });
     }
 
     if path.exists() {
@@ -270,8 +301,38 @@ mod tests {
 
         let outcome = execute(fixture.path(), InitOptions { apply: false }).unwrap();
 
-        assert!(matches!(outcome, InitOutcome::Preview { .. }));
+        assert!(matches!(
+            outcome,
+            InitOutcome::Preview {
+                target_exists: false,
+                ..
+            }
+        ));
         assert!(!fixture.path().join("koba.yml").exists());
+    }
+
+    #[test]
+    fn preview_reports_existing_koba_yml_without_suggesting_write() {
+        let fixture = TempTree::new();
+        fixture.file("skills/hoi4-modding/SKILL.md");
+        fs::write(fixture.path().join("koba.yml"), "existing: true\n").unwrap();
+
+        let outcome = execute(fixture.path(), InitOptions { apply: false }).unwrap();
+        let InitOutcome::Preview {
+            target_exists,
+            yaml,
+            ..
+        } = outcome
+        else {
+            panic!("expected preview outcome");
+        };
+
+        assert!(target_exists);
+        assert!(yaml.contains("profile: agent-skill"));
+        assert_eq!(
+            fs::read_to_string(fixture.path().join("koba.yml")).unwrap(),
+            "existing: true\n"
+        );
     }
 
     #[test]
@@ -353,7 +414,7 @@ mod tests {
 
         let outcome = execute(fixture.path(), InitOptions { apply: false }).unwrap();
 
-        let InitOutcome::Preview { profile, yaml } = outcome else {
+        let InitOutcome::Preview { profile, yaml, .. } = outcome else {
             panic!("expected preview outcome");
         };
 

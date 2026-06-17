@@ -129,12 +129,15 @@ impl ScanReport {
     }
 
     fn render_workflow(&self, output: &mut String) {
-        let mut rows = vec![
-            file_row(self.workflow.koba_yml, "koba.yml"),
-            file_row(self.workflow.package_json, "package.json"),
-            file_row(self.workflow.cargo_toml, "Cargo.toml"),
-            file_row(self.workflow.pyproject_toml, "pyproject.toml"),
-        ];
+        let mut rows = vec![file_row(self.workflow.koba_yml, "koba.yml")];
+
+        if !self.agent_skill.detected() {
+            rows.extend([
+                file_row(self.workflow.package_json, "package.json"),
+                file_row(self.workflow.cargo_toml, "Cargo.toml"),
+                file_row(self.workflow.pyproject_toml, "pyproject.toml"),
+            ]);
+        }
 
         let mut hook_sources = Vec::new();
         if self.workflow.husky_dir {
@@ -375,6 +378,9 @@ mod tests {
         assert!(rendered.contains("Profile        agent-skill"));
         assert!(rendered.contains("Skill          hoi4-modding"));
         assert!(rendered.contains("Smoke prompts  tests/smoke-prompts.md"));
+        assert!(!rendered.contains("package.json"));
+        assert!(!rendered.contains("Cargo.toml"));
+        assert!(!rendered.contains("pyproject.toml"));
     }
 
     #[test]
