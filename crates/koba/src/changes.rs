@@ -224,7 +224,7 @@ fn plan_for_group(concept: ChangeConcept, files: Vec<&WorkingTreeFile>) -> Commi
                 )
             } else if docs_only {
                 (
-                    "docs(skill): document workspace binary fallback",
+                    "docs(skill): update skill documentation",
                     "matched skills/*/** documentation",
                 )
             } else {
@@ -843,7 +843,7 @@ mod tests {
             .map(|plan| plan.message.as_str())
             .collect::<Vec<_>>();
 
-        assert!(messages.contains(&"docs(skill): document workspace binary fallback"));
+        assert!(messages.contains(&"docs(skill): update skill documentation"));
         assert!(messages.contains(&"feat(commit): sharpen path-based scope inference"));
         assert!(report.risks.iter().any(|risk| {
             risk.status == Status::Warn && risk.message.contains("multiple commit concepts")
@@ -851,6 +851,23 @@ mod tests {
         assert!(!messages
             .iter()
             .all(|message| message.contains("feat(skill)")));
+    }
+
+    #[test]
+    fn generic_skill_docs_use_neutral_documentation_message() {
+        let report = analyze(
+            &PathBuf::from("."),
+            &[
+                file("skills/hoi4-modding/SKILL.md"),
+                file("skills/hoi4-modding/references/workflows.md"),
+            ],
+        );
+
+        assert_eq!(report.plans.len(), 1);
+        assert_eq!(
+            report.plans[0].message,
+            "docs(skill): update skill documentation"
+        );
     }
 
     #[test]
