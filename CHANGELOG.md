@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## v0.1.6 - 2026-06-16
+
+### Improved
+
+- Centralized Git working-tree parsing with structured `git status --porcelain=v1 -z` handling.
+- Centralized path classification across `changes`, `suggest-commit`, and PR draft generation.
+- Improved consistency between `koba changes`, `koba suggest-commit`, and `koba pr --dry-run`.
+- Improved detection of cross-cutting internal refactors so shared analysis changes are not split into misleading module-specific feature groups.
+- Improved mixed-surface repository display, including Rust CLI repositories that also include Agent Skills.
+- Clarified doctor output for recommended Rust checks that are not configured in `koba.yml`.
+
+### Fixed
+
+- Added regression coverage to ensure files shown by `suggest-commit` match files included in recommended staging commands.
+- Added regression coverage to ensure PR draft generation includes all untracked files from structured Git status.
+
+### Safety
+
+- Preserved Koba's read-only behavior for analysis commands.
+- No staging, committing, pushing, applying, or history rewriting behavior was added.
+
 ## v0.1.5 - 2026-06-16
 
 ### Improved
