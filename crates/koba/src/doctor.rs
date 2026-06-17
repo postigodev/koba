@@ -3,7 +3,7 @@ use std::{fmt::Write, path::PathBuf};
 use crate::{
     git::GitInfo,
     output::{self, Status},
-    repo::{GithubFiles, WorkflowFiles},
+    repo::{AgentSkillFiles, GithubFiles, WorkflowFiles},
     scan::ScanReport,
 };
 
@@ -102,9 +102,9 @@ pub fn diagnose(report: &ScanReport) -> Vec<Diagnostic> {
 
     diagnose_repository(&report.git, &mut diagnostics);
     diagnose_workflow(&report.workflow, &mut diagnostics);
-    diagnose_project(&report.workflow, &mut diagnostics);
+    diagnose_project(&report.workflow, &report.agent_skill, &mut diagnostics);
     diagnose_hooks(&report.workflow, &mut diagnostics);
-    diagnose_github(&report.github, &mut diagnostics);
+    diagnose_github(&report.github, &report.agent_skill, &mut diagnostics);
 
     diagnostics
 }
@@ -227,7 +227,56 @@ fn diagnose_workflow(workflow: &WorkflowFiles, diagnostics: &mut Vec<Diagnostic>
     }
 }
 
-fn diagnose_project(workflow: &WorkflowFiles, diagnostics: &mut Vec<Diagnostic>) {
+fn diagnose_project(
+    workflow: &WorkflowFiles,
+    agent_skill: &AgentSkillFiles,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if agent_skill.detected() {
+        diagnostics.push(Diagnostic::ok(
+            Section::Project,
+            format!(
+                "Agent Skill repository detected ({} skill{})",
+                agent_skill.skills.len(),
+                if agent_skill.skills.len() == 1 {
+                    ""
+                } else {
+                    "s"
+                }
+            ),
+        ));
+        for skill in &agent_skill.skills {
+            diagnostics.push(Diagnostic::ok(
+                Section::Project,
+                format!("Skill `{}` detected", skill.name),
+            ));
+        }
+        diagnostics.push(Diagnostic::warn(
+            Section::Project,
+            "Agent Skill discovery validation is not configured",
+            "Run `npx skills add . --list` to validate skill discovery",
+        ));
+        diagnostics.push(Diagnostic::warn(
+            Section::Project,
+            "Skill repositories are Markdown/text heavy",
+            "Run `git diff --check` before committing skill changes",
+        ));
+
+        if agent_skill.evals_dir {
+            diagnostics.push(Diagnostic::ok(
+                Section::Project,
+                "`evals/` validation surface present",
+            ));
+        }
+
+        if agent_skill.smoke_prompts {
+            diagnostics.push(Diagnostic::ok(
+                Section::Project,
+                "`tests/smoke-prompts.md` validation surface present",
+            ));
+        }
+    }
+
     if workflow.cargo_toml {
         diagnostics.push(Diagnostic::ok(
             Section::Project,
@@ -264,7 +313,11 @@ fn diagnose_project(workflow: &WorkflowFiles, diagnostics: &mut Vec<Diagnostic>)
         ));
     }
 
-    if !workflow.cargo_toml && !workflow.package_json && !workflow.pyproject_toml {
+    if !workflow.cargo_toml
+        && !workflow.package_json
+        && !workflow.pyproject_toml
+        && !agent_skill.detected()
+    {
         diagnostics.push(Diagnostic::warn(
             Section::Project,
             "No supported project manifest detected",
@@ -305,10 +358,22 @@ fn diagnose_hooks(workflow: &WorkflowFiles, diagnostics: &mut Vec<Diagnostic>) {
     }
 }
 
-fn diagnose_github(github: &GithubFiles, diagnostics: &mut Vec<Diagnostic>) {
+fn diagnose_github(
+    github: &GithubFiles,
+    agent_skill: &AgentSkillFiles,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     if github.github_dir {
         diagnostics.push(Diagnostic::ok(Section::Github, ".github directory present"));
     } else {
+        if agent_skill.detected() {
+            diagnostics.push(Diagnostic::ok(
+                Section::Github,
+                ".github directory not present; optional for simple Agent Skill repositories",
+            ));
+            return;
+        }
+
         diagnostics.push(Diagnostic::warn(
             Section::Github,
             ".github directory is missing",
@@ -369,11 +434,17 @@ fn diagnose_github(github: &GithubFiles, diagnostics: &mut Vec<Diagnostic>) {
 mod tests {
     use super::*;
 
-    fn report(workflow: WorkflowFiles, github: GithubFiles, git: GitInfo) -> ScanReport {
+    fn report(
+        workflow: WorkflowFiles,
+        github: GithubFiles,
+        git: GitInfo,
+        agent_skill: AgentSkillFiles,
+    ) -> ScanReport {
         ScanReport {
             git,
             workflow,
             github,
+            agent_skill,
         }
     }
 
@@ -412,6 +483,15 @@ mod tests {
         }
     }
 
+    fn agent_skill_files() -> AgentSkillFiles {
+        AgentSkillFiles {
+            skills: Vec::new(),
+            evals_dir: false,
+            smoke_prompts: false,
+            readme: false,
+        }
+    }
+
     #[test]
     fn diagnoses_missing_repository_as_error() {
         let mut git = git_info();
@@ -420,7 +500,12 @@ mod tests {
         git.has_user_name = false;
         git.has_user_email = false;
 
-        let diagnostics = diagnose(&report(workflow_files(), github_files(), git));
+        let diagnostics = diagnose(&report(
+            workflow_files(),
+            github_files(),
+            git,
+            agent_skill_files(),
+        ));
 
         assert!(diagnostics.iter().any(|diagnostic| {
             diagnostic.section == Section::Repository
@@ -431,7 +516,12 @@ mod tests {
 
     #[test]
     fn diagnoses_missing_contract_hooks_and_github_surface() {
-        let diagnostics = diagnose(&report(workflow_files(), github_files(), git_info()));
+        let diagnostics = diagnose(&report(
+            workflow_files(),
+            github_files(),
+            git_info(),
+            agent_skill_files(),
+        ));
 
         assert!(diagnostics
             .iter()
@@ -464,7 +554,7 @@ mod tests {
             dependabot_yml: true,
         };
 
-        let diagnostics = diagnose(&report(workflow, github, git_info()));
+        let diagnostics = diagnose(&report(workflow, github, git_info(), agent_skill_files()));
 
         assert!(diagnostics
             .iter()
@@ -483,5 +573,40 @@ mod tests {
         assert!(diagnostics
             .iter()
             .any(|diagnostic| diagnostic.message == "Native pre-push hook present"));
+    }
+
+    #[test]
+    fn diagnoses_agent_skill_repo_without_generic_manifest_warning() {
+        let diagnostics = diagnose(&report(
+            workflow_files(),
+            github_files(),
+            git_info(),
+            AgentSkillFiles {
+                skills: vec![crate::repo::AgentSkill {
+                    name: "hoi4-modding".to_owned(),
+                    references_dir: false,
+                    examples_dir: false,
+                }],
+                evals_dir: true,
+                smoke_prompts: true,
+                readme: true,
+            },
+        ));
+
+        assert!(diagnostics.iter().any(|diagnostic| diagnostic
+            .message
+            .contains("Agent Skill repository detected")));
+        assert!(!diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message == "No supported project manifest detected"));
+        assert!(diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.recommendation.as_deref()
+                == Some("Run `npx skills add . --list` to validate skill discovery")));
+        assert!(diagnostics.iter().any(|diagnostic| diagnostic.message
+            == ".github directory not present; optional for simple Agent Skill repositories"));
+        assert!(!diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message == ".github directory is missing"));
     }
 }

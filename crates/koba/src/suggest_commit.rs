@@ -138,6 +138,14 @@ fn parse_porcelain_line(line: &str) -> Option<ChangedFile> {
 }
 
 fn suggest_type(files: &[ChangedFile]) -> &'static str {
+    if files.iter().all(|file| is_skill_repo_file(&file.path)) {
+        if files.iter().all(|file| is_docs_file(&file.path)) {
+            return "docs";
+        }
+
+        return "feat";
+    }
+
     if files.iter().all(|file| is_github_workflow_file(&file.path)) {
         return "ci";
     }
@@ -200,8 +208,9 @@ fn suggest_description(commit_type: &str, scope: Option<&str>) -> &'static str {
         ("docs", Some("product")) => "update product documentation",
         ("docs", _) => "update documentation",
         ("test", Some("scan")) => "cover workflow file discovery",
+        ("test", Some("skill")) => "validate skill behavior",
         ("test", _) => "add coverage",
-        ("feat", Some("skill")) => "update agent skill",
+        ("feat", Some("skill")) => "expand skill examples and evals",
         ("feat", Some("github")) => "add PR template generation",
         ("feat", Some("hooks")) => "install native and husky hooks",
         ("feat", Some("run")) => "execute configured checks",
@@ -225,7 +234,10 @@ fn scope_for_path(path: &str) -> Option<&'static str> {
         return Some("agents");
     }
 
-    if normalized.starts_with("skills/koba/") {
+    if is_skill_path(&normalized)
+        || normalized.starts_with("evals/")
+        || normalized == "tests/smoke-prompts.md"
+    {
         return Some("skill");
     }
 
@@ -260,6 +272,7 @@ fn is_docs_file(path: &str) -> bool {
     let path = path.replace('\\', "/").to_ascii_lowercase();
     path.starts_with("docs/")
         || path == ".github/pull_request_template.md"
+        || path == "tests/smoke-prompts.md"
         || path.ends_with(".md")
         || path.ends_with(".mdx")
         || path.ends_with(".rst")
@@ -307,7 +320,8 @@ fn is_feature_signal(file: &ChangedFile) -> bool {
 
     file_name == "cli.rs"
         || path.contains("/src/")
-        || path.starts_with("skills/koba/")
+        || is_skill_path(&path)
+        || path.starts_with("evals/")
         || (added && (path.ends_with(".rs") || path.ends_with(".ts") || path.ends_with(".tsx")))
 }
 
@@ -315,6 +329,25 @@ fn is_github_workflow_file(path: &str) -> bool {
     path.replace('\\', "/")
         .to_ascii_lowercase()
         .starts_with(".github/workflows/")
+}
+
+fn is_skill_repo_file(path: &str) -> bool {
+    let path = path.replace('\\', "/").to_ascii_lowercase();
+    is_readme_file(&path)
+        || is_skill_path(&path)
+        || path.starts_with("evals/")
+        || path == "tests/smoke-prompts.md"
+}
+
+fn is_skill_path(path: &str) -> bool {
+    let mut parts = path.split('/');
+    matches!(parts.next(), Some("skills"))
+        && parts.next().is_some_and(|skill| !skill.is_empty())
+        && parts.next().is_some()
+}
+
+fn is_readme_file(path: &str) -> bool {
+    path.replace('\\', "/").to_ascii_lowercase() == "readme.md"
 }
 
 fn quote_paths(paths: &[&str]) -> String {
@@ -426,7 +459,28 @@ mod tests {
     fn suggests_skill_feature_scope_for_non_docs_skill_files() {
         let suggestion = suggest(&[file("A", "skills/koba/scripts/check.ps1")]).unwrap();
 
-        assert_eq!(suggestion.message, "feat(skill): update agent skill");
+        assert_eq!(
+            suggestion.message,
+            "feat(skill): expand skill examples and evals"
+        );
+    }
+
+    #[test]
+    fn suggests_skill_feature_for_agent_skill_repo_changes() {
+        let suggestion = suggest(&[
+            file("M", "README.md"),
+            file("M", "skills/hoi4-modding/SKILL.md"),
+            file("A", "skills/hoi4-modding/examples/minimal-event.txt"),
+            file("A", "evals/expected-behavior.md"),
+            file("A", "evals/trigger-evals.json"),
+            file("M", "tests/smoke-prompts.md"),
+        ])
+        .unwrap();
+
+        assert_eq!(
+            suggestion.message,
+            "feat(skill): expand skill examples and evals"
+        );
     }
 
     #[test]

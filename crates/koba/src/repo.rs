@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowFiles {
@@ -22,9 +25,31 @@ pub struct GithubFiles {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentSkill {
+    pub name: String,
+    pub references_dir: bool,
+    pub examples_dir: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentSkillFiles {
+    pub skills: Vec<AgentSkill>,
+    pub evals_dir: bool,
+    pub smoke_prompts: bool,
+    pub readme: bool,
+}
+
+impl AgentSkillFiles {
+    pub fn detected(&self) -> bool {
+        !self.skills.is_empty()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoFiles {
     pub workflow: WorkflowFiles,
     pub github: GithubFiles,
+    pub agent_skill: AgentSkillFiles,
 }
 
 pub fn discover(root: &Path, git_dir: Option<&Path>) -> RepoFiles {
@@ -46,6 +71,40 @@ pub fn discover(root: &Path, git_dir: Option<&Path>) -> RepoFiles {
             codeowners: is_file(root.join(".github").join("CODEOWNERS")),
             dependabot_yml: is_file(root.join(".github").join("dependabot.yml")),
         },
+        agent_skill: discover_agent_skills(root),
+    }
+}
+
+fn discover_agent_skills(root: &Path) -> AgentSkillFiles {
+    let mut skills = Vec::new();
+    let skills_dir = root.join("skills");
+
+    if let Ok(entries) = fs::read_dir(skills_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() || !is_file(path.join("SKILL.md")) {
+                continue;
+            }
+
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+
+            skills.push(AgentSkill {
+                name: name.to_owned(),
+                references_dir: is_dir(path.join("references")),
+                examples_dir: is_dir(path.join("examples")),
+            });
+        }
+    }
+
+    skills.sort_by(|left, right| left.name.cmp(&right.name));
+
+    AgentSkillFiles {
+        skills,
+        evals_dir: is_dir(root.join("evals")),
+        smoke_prompts: is_file(root.join("tests").join("smoke-prompts.md")),
+        readme: is_file(root.join("README.md")),
     }
 }
 
@@ -133,6 +192,45 @@ mod tests {
                 dependabot_yml: false,
             }
         );
+        assert_eq!(
+            files.agent_skill,
+            AgentSkillFiles {
+                skills: Vec::new(),
+                evals_dir: false,
+                smoke_prompts: false,
+                readme: false,
+            }
+        );
+    }
+
+    #[test]
+    fn detects_agent_skill_repositories() {
+        let fixture = TempTree::new();
+        fixture.file("README.md");
+        fixture.file("skills/hoi4-modding/SKILL.md");
+        fixture.dir("skills/hoi4-modding/references");
+        fixture.dir("skills/hoi4-modding/examples");
+        fixture.file("skills/rust-cli-review/SKILL.md");
+        fixture.dir("evals");
+        fixture.file("tests/smoke-prompts.md");
+
+        let files = discover(fixture.path(), None);
+
+        assert!(files.agent_skill.detected());
+        assert_eq!(
+            files
+                .agent_skill
+                .skills
+                .iter()
+                .map(|skill| skill.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["hoi4-modding", "rust-cli-review"]
+        );
+        assert!(files.agent_skill.skills[0].references_dir);
+        assert!(files.agent_skill.skills[0].examples_dir);
+        assert!(files.agent_skill.evals_dir);
+        assert!(files.agent_skill.smoke_prompts);
+        assert!(files.agent_skill.readme);
     }
 
     struct TempTree {

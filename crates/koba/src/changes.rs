@@ -1,4 +1,9 @@
-use std::{collections::BTreeMap, fmt::Write, fs, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Write,
+    fs,
+    path::PathBuf,
+};
 
 use crate::{
     git,
@@ -162,14 +167,14 @@ fn plan_commits(files: &[WorkingTreeFile]) -> Vec<CommitPlan> {
     }
 
     let mut groups = BTreeMap::<ChangeConcept, Vec<&WorkingTreeFile>>::new();
-    let dominant_support_concept = files
+    let dominant_support_concepts = files
         .iter()
         .filter(|file| !is_weak_support_file(&file.path))
         .map(|file| concept_for_path(&file.path))
         .filter(|concept| *concept != ChangeConcept::Docs && *concept != ChangeConcept::Other)
-        .collect::<Vec<_>>();
-    let dominant_support_concept = if dominant_support_concept.len() == 1 {
-        dominant_support_concept.first().cloned()
+        .collect::<BTreeSet<_>>();
+    let dominant_support_concept = if dominant_support_concepts.len() == 1 {
+        dominant_support_concepts.first().cloned()
     } else {
         None
     };
@@ -212,13 +217,21 @@ fn plan_for_group(concept: ChangeConcept, files: Vec<&WorkingTreeFile>) -> Commi
             "matched docs/agents.md",
         ),
         ChangeConcept::Skill => {
-            if docs_only {
+            if is_agent_skill_enhancement(&paths) {
+                (
+                    "feat(skill): expand skill examples and evals",
+                    "matched Agent Skill content, examples, or evals",
+                )
+            } else if docs_only {
                 (
                     "docs(skill): document workspace binary fallback",
-                    "matched skills/koba/** documentation",
+                    "matched skills/*/** documentation",
                 )
             } else {
-                ("feat(skill): update agent skill", "matched skills/koba/**")
+                (
+                    "feat(skill): expand skill examples and evals",
+                    "matched skills/*/**",
+                )
             }
         }
         ChangeConcept::CommitEngine => (
@@ -306,6 +319,7 @@ fn recommend_checks(cwd: &PathBuf, files: &[WorkingTreeFile]) -> Vec<CheckRecomm
     let has_github_workflow = files.iter().any(|file| is_github_workflow(&file.path));
     let has_js_ts = files.iter().any(|file| is_js_ts_source(&file.path));
     let has_python = files.iter().any(|file| is_python_source(&file.path));
+    let has_skill_repo_changes = files.iter().any(|file| is_agent_skill_file(&file.path));
 
     checks.push(CheckRecommendation {
         command: "git diff --check".to_owned(),
@@ -334,6 +348,25 @@ fn recommend_checks(cwd: &PathBuf, files: &[WorkingTreeFile]) -> Vec<CheckRecomm
             checks.push(CheckRecommendation {
                 command: format!("python -m json.tool {}", quote_path(&file.path)),
                 reason: "Scoop manifest changed; parse JSON and verify release URL/hash manually"
+                    .to_owned(),
+            });
+        }
+    }
+
+    if has_skill_repo_changes && cwd.join("skills").is_dir() {
+        checks.push(CheckRecommendation {
+            command: "npx skills add . --list".to_owned(),
+            reason: "Agent Skill files changed; validate local skill discovery".to_owned(),
+        });
+
+        if cwd.join("evals").is_dir()
+            || files
+                .iter()
+                .any(|file| normalize(&file.path).starts_with("evals/"))
+        {
+            checks.push(CheckRecommendation {
+                command: "review documented eval process".to_owned(),
+                reason: "eval files changed or are present; do not invent an eval runner"
                     .to_owned(),
             });
         }
@@ -574,7 +607,7 @@ fn concept_for_path(path: &str) -> ChangeConcept {
     if path == "docs/agents.md" {
         return ChangeConcept::AgentsDocs;
     }
-    if path.starts_with("skills/koba/") {
+    if is_agent_skill_file(&path) {
         return ChangeConcept::Skill;
     }
     if path == "crates/koba/src/suggest_commit.rs" {
@@ -649,6 +682,28 @@ fn is_docs_file(path: &str) -> bool {
         || path.ends_with(".mdx")
         || path.ends_with(".rst")
         || path == ".github/pull_request_template.md"
+}
+
+fn is_agent_skill_file(path: &str) -> bool {
+    let path = normalize(path);
+    is_skill_path(&path) || path.starts_with("evals/") || path == "tests/smoke-prompts.md"
+}
+
+fn is_skill_path(path: &str) -> bool {
+    let mut parts = path.split('/');
+    matches!(parts.next(), Some("skills"))
+        && parts.next().is_some_and(|skill| !skill.is_empty())
+        && parts.next().is_some()
+}
+
+fn is_agent_skill_enhancement(paths: &[String]) -> bool {
+    paths.iter().any(|path| {
+        let path = normalize(path);
+        path.starts_with("evals/")
+            || path == "tests/smoke-prompts.md"
+            || path.contains("/examples/")
+            || (is_skill_path(&path) && !is_docs_file(&path))
+    })
 }
 
 fn is_rust_source(path: &str) -> bool {
@@ -799,6 +854,38 @@ mod tests {
     }
 
     #[test]
+    fn agent_skill_repo_changes_are_one_skill_enhancement_group() {
+        let cwd = TempTree::new();
+        cwd.file("skills/hoi4-modding/SKILL.md");
+        cwd.dir("evals");
+        let report = analyze(
+            &cwd.path().to_path_buf(),
+            &[
+                file("README.md"),
+                file("skills/hoi4-modding/SKILL.md"),
+                file("tests/smoke-prompts.md"),
+                file("evals/expected-behavior.md"),
+                file("evals/trigger-evals.json"),
+                file("skills/hoi4-modding/examples/minimal-event.txt"),
+            ],
+        );
+
+        assert_eq!(report.plans.len(), 1);
+        assert_eq!(
+            report.plans[0].message,
+            "feat(skill): expand skill examples and evals"
+        );
+        assert!(report
+            .checks
+            .iter()
+            .any(|check| check.command == "git diff --check"));
+        assert!(report
+            .checks
+            .iter()
+            .any(|check| check.command == "npx skills add . --list"));
+    }
+
+    #[test]
     fn scoop_manifest_recommends_packaging_and_json_hash_review() {
         let report = analyze(
             &PathBuf::from("."),
@@ -917,6 +1004,18 @@ mod tests {
                 "git init failed: {}",
                 String::from_utf8_lossy(&output.stderr)
             );
+        }
+
+        fn file(&self, relative: &str) {
+            let path = self.path.join(relative);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).unwrap();
+            }
+            fs::write(path, "").unwrap();
+        }
+
+        fn dir(&self, relative: &str) {
+            fs::create_dir_all(self.path.join(relative)).unwrap();
         }
     }
 
