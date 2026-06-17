@@ -35,22 +35,6 @@ pub fn inspect(cwd: &Path) -> GitInfo {
     }
 }
 
-pub fn status_porcelain(cwd: &Path) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(["status", "--porcelain", "--untracked-files=all"])
-        .current_dir(cwd)
-        .output()
-        .map_err(|error| format!("failed to run git status --porcelain: {error}"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("git status --porcelain failed: {}", stderr.trim()));
-    }
-
-    String::from_utf8(output.stdout)
-        .map_err(|error| format!("git status --porcelain returned invalid UTF-8: {error}"))
-}
-
 pub fn commits_since_base(cwd: &Path) -> Option<(String, Vec<String>)> {
     let base = default_base_branch(cwd)?;
     let range = format!("{base}..HEAD");

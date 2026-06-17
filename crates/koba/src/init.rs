@@ -63,14 +63,34 @@ pub struct WorkflowContract {
 }
 
 impl WorkflowContract {
-    fn from_profile(profile: Profile, agent_skill: &AgentSkillFiles) -> Self {
+    fn from_profile(profile: Profile, agent_skill: &AgentSkillFiles, koba_workspace: bool) -> Self {
         match profile {
-            Profile::RustCli => Self {
-                profile,
-                pre_commit: vec!["cargo fmt --check"],
-                pre_push: vec!["cargo test"],
-                notes: Vec::new(),
-            },
+            Profile::RustCli => {
+                let mut pre_commit = vec!["cargo fmt --check"];
+                let mut pre_push = vec!["cargo test"];
+
+                if agent_skill.detected() {
+                    pre_commit.push(if koba_workspace {
+                        "cargo check -p koba"
+                    } else {
+                        "cargo check"
+                    });
+                    pre_commit.push(if koba_workspace {
+                        "cargo test -p koba"
+                    } else {
+                        "cargo test"
+                    });
+                    pre_commit.push("\"npx skills add . --list\"");
+                    pre_push.clear();
+                }
+
+                Self {
+                    profile,
+                    pre_commit,
+                    pre_push,
+                    notes: Vec::new(),
+                }
+            }
             Profile::Node => Self {
                 profile,
                 pre_commit: vec!["npm test"],
@@ -223,7 +243,9 @@ pub fn run(cwd: PathBuf, options: InitOptions) -> Result<(), String> {
 pub fn execute(cwd: &Path, options: InitOptions) -> Result<InitOutcome, String> {
     let files = repo::discover(cwd, None);
     let profile = select_profile(&files);
-    let yaml = WorkflowContract::from_profile(profile, &files.agent_skill).render_yaml();
+    let koba_workspace = cwd.join("crates").join("koba").join("Cargo.toml").is_file();
+    let yaml =
+        WorkflowContract::from_profile(profile, &files.agent_skill, koba_workspace).render_yaml();
     let path = cwd.join("koba.yml");
 
     if !options.apply {
@@ -250,10 +272,6 @@ pub fn execute(cwd: &Path, options: InitOptions) -> Result<InitOutcome, String> 
 pub fn select_profile(files: &RepoFiles) -> Profile {
     let workflow = &files.workflow;
 
-    if files.agent_skill.detected() {
-        return Profile::AgentSkill;
-    }
-
     let markers = [
         workflow.cargo_toml,
         workflow.package_json,
@@ -264,6 +282,7 @@ pub fn select_profile(files: &RepoFiles) -> Profile {
     .count();
 
     match markers {
+        0 if files.agent_skill.detected() => Profile::AgentSkill,
         0 => Profile::Custom,
         1 if workflow.cargo_toml => Profile::RustCli,
         1 if workflow.package_json => Profile::Node,
@@ -403,6 +422,10 @@ mod tests {
             )),
             Profile::AgentSkill
         );
+        assert_eq!(
+            select_profile(&repo_files(workflow(true, false, false), agent_skill(true))),
+            Profile::RustCli
+        );
     }
 
     #[test]
@@ -424,6 +447,26 @@ mod tests {
         assert!(yaml.contains("- \"npx skills add . --list\""));
         assert!(yaml.contains("evals/ detected"));
         assert!(yaml.contains("tests/smoke-prompts.md detected"));
+    }
+
+    #[test]
+    fn previews_mixed_rust_and_agent_skill_as_rust_with_skill_validation() {
+        let fixture = TempTree::new();
+        fixture.file("Cargo.toml");
+        fixture.file("skills/koba/SKILL.md");
+
+        let outcome = execute(fixture.path(), InitOptions { apply: false }).unwrap();
+
+        let InitOutcome::Preview { profile, yaml, .. } = outcome else {
+            panic!("expected preview outcome");
+        };
+
+        assert_eq!(profile, Profile::RustCli);
+        assert!(yaml.contains("profile: rust-cli"));
+        assert!(yaml.contains("- cargo fmt --check"));
+        assert!(yaml.contains("- cargo check"));
+        assert!(yaml.contains("- cargo test"));
+        assert!(yaml.contains("- \"npx skills add . --list\""));
     }
 
     fn workflow(cargo_toml: bool, package_json: bool, pyproject_toml: bool) -> WorkflowFiles {

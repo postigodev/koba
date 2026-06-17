@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    git,
+    git, git_status,
     output::{self, Status},
     suggest_commit::{self, ChangedFile},
 };
@@ -62,7 +62,8 @@ pub fn execute(cwd: &Path, options: PrOptions) -> Result<PrOutcome, String> {
         return Err("not inside a Git repository".to_owned());
     }
 
-    let changed_files = suggest_commit::parse_porcelain(&git::status_porcelain(cwd)?);
+    let changed_files =
+        suggest_commit::changed_files_from_status(&git_status::status_entries(cwd)?);
     let (base_branch, commits) = git::commits_since_base(cwd)
         .map(|(base, commits)| (Some(base), commits))
         .unwrap_or_else(|| (None, Vec::new()));
@@ -351,7 +352,7 @@ mod tests {
             None,
         );
 
-        assert_eq!(draft.title, "feat: update workflow tooling");
+        assert_eq!(draft.title, "feat(pr): update PR draft helper");
         assert!(draft.body.contains("## Summary"));
         assert!(draft.body.contains("- A crates/koba/src/pr.rs"));
         assert!(draft
@@ -373,6 +374,21 @@ mod tests {
         assert!(draft.body.contains("## Screenshots or demo"));
         assert!(!draft.body.contains("## Risk / rollback"));
         assert!(draft.body.contains("docs(product): update product docs"));
+    }
+
+    #[test]
+    fn body_lists_every_untracked_file_from_git_status() {
+        let entries = git_status::parse_porcelain_z(
+            b"?? crates/koba/src/git_status.rs\0?? crates/koba/src/path_classification.rs\0",
+        )
+        .unwrap();
+        let changed_files = suggest_commit::changed_files_from_status(&entries);
+        let draft = build_draft(Some("analysis/refactor"), None, &changed_files, &[], None);
+
+        assert!(draft.body.contains("- ?? crates/koba/src/git_status.rs"));
+        assert!(draft
+            .body
+            .contains("- ?? crates/koba/src/path_classification.rs"));
     }
 
     #[test]

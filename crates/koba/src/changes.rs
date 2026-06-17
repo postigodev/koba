@@ -7,17 +7,12 @@ use std::{
 
 use crate::{
     git,
+    git_status::{self, GitStatusEntry},
     output::{self, Status, StatusRow},
+    path_classification::{self, ChangeConcept},
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkingTreeFile {
-    pub path: String,
-    pub status: String,
-    pub staged: bool,
-    pub unstaged: bool,
-    pub untracked: bool,
-}
+pub type WorkingTreeFile = GitStatusEntry;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitPlan {
@@ -58,27 +53,6 @@ pub struct Risk {
     pub message: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-enum ChangeConcept {
-    AgentsDocs,
-    Skill,
-    CommitEngine,
-    Output,
-    Pr,
-    Hooks,
-    Github,
-    RunChecks,
-    Init,
-    Changes,
-    Scoop,
-    GithubCi,
-    GithubTemplate,
-    Rust,
-    Docs,
-    Config,
-    Other,
-}
-
 pub fn run(cwd: PathBuf) -> Result<(), String> {
     match execute(cwd) {
         Ok(output) => {
@@ -100,13 +74,9 @@ pub fn execute(cwd: PathBuf) -> Result<String, String> {
         return Err("not inside a Git repository".to_owned());
     }
 
-    let files = parse_status_porcelain(&git::status_porcelain(&cwd)?);
+    let files = git_status::status_entries(&cwd)?;
     let report = analyze(&cwd, &files);
     Ok(render(&report))
-}
-
-pub fn parse_status_porcelain(output: &str) -> Vec<WorkingTreeFile> {
-    output.lines().filter_map(parse_status_line).collect()
 }
 
 pub fn analyze(cwd: &PathBuf, files: &[WorkingTreeFile]) -> ChangesReport {
@@ -128,49 +98,25 @@ pub fn analyze(cwd: &PathBuf, files: &[WorkingTreeFile]) -> ChangesReport {
     }
 }
 
-fn parse_status_line(line: &str) -> Option<WorkingTreeFile> {
-    if line.len() < 4 {
-        return None;
-    }
-
-    let mut chars = line.chars();
-    let x = chars.next()?;
-    let y = chars.next()?;
-    let raw_path = line.get(3..)?.trim();
-    let path = raw_path
-        .rsplit_once(" -> ")
-        .map(|(_, new_path)| new_path)
-        .unwrap_or(raw_path)
-        .trim_matches('"')
-        .to_owned();
-    let untracked = x == '?' && y == '?';
-    let staged = !untracked && x != ' ';
-    let unstaged = !untracked && y != ' ';
-    let status = if untracked {
-        "??".to_owned()
-    } else {
-        format!("{x}{y}").trim().to_owned()
-    };
-
-    Some(WorkingTreeFile {
-        path,
-        status,
-        staged,
-        unstaged,
-        untracked,
-    })
-}
-
 fn plan_commits(files: &[WorkingTreeFile]) -> Vec<CommitPlan> {
     if files.is_empty() {
         return Vec::new();
     }
 
+    if path_classification::is_analysis_refactor_path_set(
+        files.iter().map(|file| file.path.as_str()),
+    ) {
+        return vec![plan_for_group(
+            ChangeConcept::Analysis,
+            files.iter().collect(),
+        )];
+    }
+
     let mut groups = BTreeMap::<ChangeConcept, Vec<&WorkingTreeFile>>::new();
     let dominant_support_concepts = files
         .iter()
-        .filter(|file| !is_weak_support_file(&file.path))
-        .map(|file| concept_for_path(&file.path))
+        .filter(|file| !path_classification::is_weak_support_file(&file.path))
+        .map(|file| path_classification::concept_for_path(&file.path))
         .filter(|concept| *concept != ChangeConcept::Docs && *concept != ChangeConcept::Other)
         .collect::<BTreeSet<_>>();
     let dominant_support_concept = if dominant_support_concepts.len() == 1 {
@@ -180,12 +126,12 @@ fn plan_commits(files: &[WorkingTreeFile]) -> Vec<CommitPlan> {
     };
 
     for file in files {
-        let concept = if is_weak_support_file(&file.path) {
+        let concept = if path_classification::is_weak_support_file(&file.path) {
             dominant_support_concept
                 .clone()
-                .unwrap_or_else(|| concept_for_path(&file.path))
+                .unwrap_or_else(|| path_classification::concept_for_path(&file.path))
         } else {
-            concept_for_path(&file.path)
+            path_classification::concept_for_path(&file.path)
         };
         groups.entry(concept).or_default().push(file);
     }
@@ -201,10 +147,18 @@ fn plan_for_group(concept: ChangeConcept, files: Vec<&WorkingTreeFile>) -> Commi
         .iter()
         .map(|file| file.path.clone())
         .collect::<Vec<_>>();
-    let docs_only = paths.iter().all(|path| is_docs_file(path));
+    let docs_only = paths
+        .iter()
+        .all(|path| path_classification::is_docs_file(path));
     let mut warnings = Vec::new();
 
-    if paths.iter().any(|path| is_readme(path)) && paths.iter().any(|path| is_rust_source(path)) {
+    if paths
+        .iter()
+        .any(|path| path_classification::is_readme(path))
+        && paths
+            .iter()
+            .any(|path| path_classification::is_rust_source(path))
+    {
         warnings.push(
             "README changed with Rust source; confirm the docs describe the same change."
                 .to_owned(),
@@ -212,12 +166,16 @@ fn plan_for_group(concept: ChangeConcept, files: Vec<&WorkingTreeFile>) -> Commi
     }
 
     let (message, reason) = match concept {
+        ChangeConcept::Analysis => (
+            "refactor(analysis): centralize status and path classification",
+            "matched shared analysis/status modules and their consumers",
+        ),
         ChangeConcept::AgentsDocs => (
             "docs(agents): update agent documentation",
             "matched docs/agents.md",
         ),
         ChangeConcept::Skill => {
-            if is_agent_skill_enhancement(&paths) {
+            if path_classification::is_agent_skill_enhancement(&paths) {
                 (
                     "feat(skill): expand skill examples and evals",
                     "matched Agent Skill content, examples, or evals",
@@ -312,14 +270,25 @@ fn recommend_checks(cwd: &PathBuf, files: &[WorkingTreeFile]) -> Vec<CheckRecomm
     }
 
     let mut checks = Vec::new();
-    let has_rust = files
+    let has_rust = files.iter().any(|file| {
+        path_classification::is_rust_source(&file.path)
+            || path_classification::is_cargo_file(&file.path)
+    });
+    let has_scoop = files
         .iter()
-        .any(|file| is_rust_source(&file.path) || is_cargo_file(&file.path));
-    let has_scoop = files.iter().any(|file| is_scoop_manifest(&file.path));
-    let has_github_workflow = files.iter().any(|file| is_github_workflow(&file.path));
-    let has_js_ts = files.iter().any(|file| is_js_ts_source(&file.path));
-    let has_python = files.iter().any(|file| is_python_source(&file.path));
-    let has_skill_repo_changes = files.iter().any(|file| is_agent_skill_file(&file.path));
+        .any(|file| path_classification::is_scoop_manifest(&file.path));
+    let has_github_workflow = files
+        .iter()
+        .any(|file| path_classification::is_github_workflow(&file.path));
+    let has_js_ts = files
+        .iter()
+        .any(|file| path_classification::is_js_ts_source(&file.path));
+    let has_python = files
+        .iter()
+        .any(|file| path_classification::is_python_source(&file.path));
+    let has_skill_repo_changes = files
+        .iter()
+        .any(|file| path_classification::is_agent_skill_file(&file.path));
 
     checks.push(CheckRecommendation {
         command: "git diff --check".to_owned(),
@@ -344,7 +313,10 @@ fn recommend_checks(cwd: &PathBuf, files: &[WorkingTreeFile]) -> Vec<CheckRecomm
     }
 
     if has_scoop {
-        for file in files.iter().filter(|file| is_scoop_manifest(&file.path)) {
+        for file in files
+            .iter()
+            .filter(|file| path_classification::is_scoop_manifest(&file.path))
+        {
             checks.push(CheckRecommendation {
                 command: format!("python -m json.tool {}", quote_path(&file.path)),
                 reason: "Scoop manifest changed; parse JSON and verify release URL/hash manually"
@@ -362,7 +334,7 @@ fn recommend_checks(cwd: &PathBuf, files: &[WorkingTreeFile]) -> Vec<CheckRecomm
         if cwd.join("evals").is_dir()
             || files
                 .iter()
-                .any(|file| normalize(&file.path).starts_with("evals/"))
+                .any(|file| path_classification::normalize(&file.path).starts_with("evals/"))
         {
             checks.push(CheckRecommendation {
                 command: "review documented eval process".to_owned(),
@@ -600,154 +572,6 @@ fn confidence_label(confidence: Confidence) -> &'static str {
     }
 }
 
-fn concept_for_path(path: &str) -> ChangeConcept {
-    let path = normalize(path);
-    let file_name = path.rsplit('/').next().unwrap_or(path.as_str());
-
-    if path == "docs/agents.md" {
-        return ChangeConcept::AgentsDocs;
-    }
-    if is_agent_skill_file(&path) {
-        return ChangeConcept::Skill;
-    }
-    if path == "crates/koba/src/suggest_commit.rs" {
-        return ChangeConcept::CommitEngine;
-    }
-    if path == "crates/koba/src/output.rs" {
-        return ChangeConcept::Output;
-    }
-    if path == "crates/koba/src/pr.rs" {
-        return ChangeConcept::Pr;
-    }
-    if path == "crates/koba/src/hooks.rs" {
-        return ChangeConcept::Hooks;
-    }
-    if path == "crates/koba/src/github.rs" {
-        return ChangeConcept::Github;
-    }
-    if path == "crates/koba/src/run_checks.rs" {
-        return ChangeConcept::RunChecks;
-    }
-    if path == "crates/koba/src/init.rs" {
-        return ChangeConcept::Init;
-    }
-    if path == "crates/koba/src/changes.rs" {
-        return ChangeConcept::Changes;
-    }
-    if path.starts_with("packaging/scoop/")
-        || (path.starts_with("bucket/") && file_name.ends_with(".json"))
-    {
-        return ChangeConcept::Scoop;
-    }
-    if is_github_workflow(&path) {
-        return ChangeConcept::GithubCi;
-    }
-    if path == ".github/pull_request_template.md" {
-        return ChangeConcept::GithubTemplate;
-    }
-    if is_rust_source(&path) {
-        return ChangeConcept::Rust;
-    }
-    if is_docs_file(&path) {
-        return ChangeConcept::Docs;
-    }
-    if is_config_file(&path) {
-        return ChangeConcept::Config;
-    }
-
-    ChangeConcept::Other
-}
-
-fn normalize(path: &str) -> String {
-    path.replace('\\', "/").to_ascii_lowercase()
-}
-
-fn is_readme(path: &str) -> bool {
-    normalize(path) == "readme.md"
-}
-
-fn is_weak_support_file(path: &str) -> bool {
-    let path = normalize(path);
-    is_readme(&path)
-        || path == "crates/koba/src/cli.rs"
-        || path == "crates/koba/src/commands.rs"
-        || path == "crates/koba/src/lib.rs"
-        || path == "crates/koba/tests/cli.rs"
-}
-
-fn is_docs_file(path: &str) -> bool {
-    let path = normalize(path);
-    path.starts_with("docs/")
-        || path.ends_with(".md")
-        || path.ends_with(".mdx")
-        || path.ends_with(".rst")
-        || path == ".github/pull_request_template.md"
-}
-
-fn is_agent_skill_file(path: &str) -> bool {
-    let path = normalize(path);
-    is_skill_path(&path) || path.starts_with("evals/") || path == "tests/smoke-prompts.md"
-}
-
-fn is_skill_path(path: &str) -> bool {
-    let mut parts = path.split('/');
-    matches!(parts.next(), Some("skills"))
-        && parts.next().is_some_and(|skill| !skill.is_empty())
-        && parts.next().is_some()
-}
-
-fn is_agent_skill_enhancement(paths: &[String]) -> bool {
-    paths.iter().any(|path| {
-        let path = normalize(path);
-        path.starts_with("evals/")
-            || path == "tests/smoke-prompts.md"
-            || path.contains("/examples/")
-            || (is_skill_path(&path) && !is_docs_file(&path))
-    })
-}
-
-fn is_rust_source(path: &str) -> bool {
-    normalize(path).ends_with(".rs")
-}
-
-fn is_cargo_file(path: &str) -> bool {
-    let path = normalize(path);
-    path.ends_with("cargo.toml") || path.ends_with("cargo.lock")
-}
-
-fn is_scoop_manifest(path: &str) -> bool {
-    let path = normalize(path);
-    (path.starts_with("packaging/scoop/") || path.starts_with("bucket/")) && path.ends_with(".json")
-}
-
-fn is_github_workflow(path: &str) -> bool {
-    normalize(path).starts_with(".github/workflows/")
-}
-
-fn is_js_ts_source(path: &str) -> bool {
-    let path = normalize(path);
-    path.ends_with(".js")
-        || path.ends_with(".jsx")
-        || path.ends_with(".ts")
-        || path.ends_with(".tsx")
-        || path.ends_with(".mjs")
-        || path.ends_with(".cjs")
-}
-
-fn is_python_source(path: &str) -> bool {
-    normalize(path).ends_with(".py")
-}
-
-fn is_config_file(path: &str) -> bool {
-    let path = normalize(path);
-    path.ends_with(".toml")
-        || path.ends_with(".yml")
-        || path.ends_with(".yaml")
-        || path.ends_with(".json")
-        || path == ".gitignore"
-        || path == ".gitattributes"
-}
-
 fn quote_path(path: &str) -> String {
     format!("\"{}\"", path.replace('\\', "\\\\").replace('"', "\\\""))
 }
@@ -762,18 +586,13 @@ mod tests {
     };
 
     fn file(path: &str) -> WorkingTreeFile {
-        WorkingTreeFile {
-            path: path.to_owned(),
-            status: "M".to_owned(),
-            staged: false,
-            unstaged: true,
-            untracked: false,
-        }
+        WorkingTreeFile::from_status(" M", path)
     }
 
     #[test]
     fn parses_status_counts_without_mutation() {
-        let files = parse_status_porcelain("M  staged.rs\n M unstaged.rs\n?? new.md\n");
+        let files =
+            git_status::parse_porcelain_z(b"M  staged.rs\0 M unstaged.rs\0?? new.md\0").unwrap();
 
         let report = analyze(&PathBuf::from("."), &files);
 
@@ -851,6 +670,41 @@ mod tests {
         assert!(!messages
             .iter()
             .all(|message| message.contains("feat(skill)")));
+    }
+
+    #[test]
+    fn analysis_refactor_groups_shared_modules_and_consumers_together() {
+        let report = analyze(
+            &PathBuf::from("."),
+            &[
+                file("crates/koba/src/git_status.rs"),
+                file("crates/koba/src/path_classification.rs"),
+                file("crates/koba/src/changes.rs"),
+                file("crates/koba/src/suggest_commit.rs"),
+                file("crates/koba/src/pr.rs"),
+            ],
+        );
+
+        assert_eq!(report.plans.len(), 1);
+        assert_eq!(
+            report.plans[0].message,
+            "refactor(analysis): centralize status and path classification"
+        );
+        assert!(report
+            .risks
+            .iter()
+            .any(|risk| risk.status == Status::Ok && risk.message.contains("no mixed-change")));
+    }
+
+    #[test]
+    fn isolated_changes_module_keeps_changes_scope() {
+        let report = analyze(&PathBuf::from("."), &[file("crates/koba/src/changes.rs")]);
+
+        assert_eq!(report.plans.len(), 1);
+        assert_eq!(
+            report.plans[0].message,
+            "feat(changes): review working tree changes"
+        );
     }
 
     #[test]
@@ -989,6 +843,19 @@ mod tests {
             report.plans[0].message,
             "feat(changes): review working tree changes"
         );
+    }
+
+    #[test]
+    fn changes_and_suggest_commit_agree_on_simple_dominant_concept() {
+        let report = analyze(&PathBuf::from("."), &[file("crates/koba/src/output.rs")]);
+        let suggestion = crate::suggest_commit::suggest(&[crate::suggest_commit::ChangedFile {
+            status: "M".to_owned(),
+            path: "crates/koba/src/output.rs".to_owned(),
+        }])
+        .unwrap();
+
+        assert_eq!(report.plans.len(), 1);
+        assert_eq!(report.plans[0].message, suggestion.message);
     }
 
     struct TempTree {

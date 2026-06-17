@@ -1,8 +1,9 @@
 use std::{collections::BTreeMap, fmt::Write, path::PathBuf};
 
 use crate::{
-    git,
+    git, git_status,
     output::{self, Status},
+    path_classification,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,17 +39,32 @@ pub fn execute(cwd: PathBuf) -> Result<String, String> {
         return Err("not inside a Git repository".to_owned());
     }
 
-    let changed_files = parse_porcelain(&git::status_porcelain(&cwd)?);
+    let changed_files = changed_files_from_status(&git_status::status_entries(&cwd)?);
     Ok(render(&changed_files))
 }
 
-pub fn parse_porcelain(output: &str) -> Vec<ChangedFile> {
-    output.lines().filter_map(parse_porcelain_line).collect()
+pub fn changed_files_from_status(entries: &[git_status::GitStatusEntry]) -> Vec<ChangedFile> {
+    entries
+        .iter()
+        .map(|entry| ChangedFile {
+            status: entry.short_status(),
+            path: entry.path.clone(),
+        })
+        .collect()
 }
 
 pub fn suggest(files: &[ChangedFile]) -> Option<CommitSuggestion> {
     if files.is_empty() {
         return None;
+    }
+
+    if path_classification::is_analysis_refactor_path_set(
+        files.iter().map(|file| file.path.as_str()),
+    ) {
+        return Some(CommitSuggestion {
+            message: "refactor(analysis): centralize status and path classification".to_owned(),
+            note: None,
+        });
     }
 
     let commit_type = suggest_type(files);
@@ -120,45 +136,46 @@ fn render(files: &[ChangedFile]) -> String {
     output
 }
 
-fn parse_porcelain_line(line: &str) -> Option<ChangedFile> {
-    if line.len() < 4 {
-        return None;
-    }
-
-    let status = line.get(0..2)?.trim().to_owned();
-    let raw_path = line.get(3..)?.trim();
-    let path = raw_path
-        .rsplit_once(" -> ")
-        .map(|(_, new_path)| new_path)
-        .unwrap_or(raw_path)
-        .trim_matches('"')
-        .to_owned();
-
-    Some(ChangedFile { status, path })
-}
-
 fn suggest_type(files: &[ChangedFile]) -> &'static str {
-    if files.iter().all(|file| is_skill_repo_file(&file.path)) {
-        if files.iter().all(|file| is_docs_file(&file.path)) {
+    if files
+        .iter()
+        .all(|file| path_classification::is_skill_repo_file(&file.path))
+    {
+        if files
+            .iter()
+            .all(|file| path_classification::is_docs_file(&file.path))
+        {
             return "docs";
         }
 
         return "feat";
     }
 
-    if files.iter().all(|file| is_github_workflow_file(&file.path)) {
+    if files
+        .iter()
+        .all(|file| path_classification::is_github_workflow(&file.path))
+    {
         return "ci";
     }
 
-    if files.iter().all(|file| is_docs_file(&file.path)) {
+    if files
+        .iter()
+        .all(|file| path_classification::is_docs_file(&file.path))
+    {
         return "docs";
     }
 
-    if files.iter().all(|file| is_test_file(&file.path)) {
+    if files
+        .iter()
+        .all(|file| path_classification::is_test_file(&file.path))
+    {
         return "test";
     }
 
-    if files.iter().all(|file| is_chore_file(&file.path)) {
+    if files
+        .iter()
+        .all(|file| path_classification::is_chore_file(&file.path))
+    {
         return "chore";
     }
 
@@ -172,7 +189,7 @@ fn suggest_type(files: &[ChangedFile]) -> &'static str {
 fn suggest_scope(files: &[ChangedFile]) -> (Option<String>, bool) {
     let mut counts = BTreeMap::<&'static str, usize>::new();
     for file in files {
-        if let Some(scope) = scope_for_path(&file.path) {
+        if let Some(scope) = path_classification::commit_scope_for_path(&file.path) {
             *counts.entry(scope).or_default() += 1;
         }
     }
@@ -182,20 +199,13 @@ fn suggest_scope(files: &[ChangedFile]) -> (Option<String>, bool) {
     }
 
     let max_count = counts.values().copied().max().unwrap_or_default();
-    let scope = scope_priority()
+    let scope = path_classification::scope_priority()
         .into_iter()
         .find(|scope| counts.get(scope).copied() == Some(max_count))
         .or_else(|| counts.keys().next().copied())
         .expect("non-empty scope map should have a scope");
 
     (Some(scope.to_owned()), counts.len() > 1)
-}
-
-fn scope_priority() -> [&'static str; 12] {
-    [
-        "agents", "skill", "scoop", "github", "hooks", "run", "init", "doctor", "scan", "repo",
-        "config", "cli",
-    ]
 }
 
 fn suggest_description(commit_type: &str, scope: Option<&str>) -> &'static str {
@@ -210,6 +220,10 @@ fn suggest_description(commit_type: &str, scope: Option<&str>) -> &'static str {
         ("test", Some("scan")) => "cover workflow file discovery",
         ("test", Some("skill")) => "validate skill behavior",
         ("test", _) => "add coverage",
+        ("feat", Some("changes")) => "review working tree changes",
+        ("feat", Some("commit")) => "sharpen path-based scope inference",
+        ("feat", Some("output")) => "improve terminal rendering",
+        ("feat", Some("pr")) => "update PR draft helper",
         ("feat", Some("skill")) => "expand skill examples and evals",
         ("feat", Some("github")) => "add PR template generation",
         ("feat", Some("hooks")) => "install native and husky hooks",
@@ -222,132 +236,13 @@ fn suggest_description(commit_type: &str, scope: Option<&str>) -> &'static str {
         ("chore", Some("scoop")) => "update Scoop packaging",
         ("chore", Some("config")) => "update configuration",
         ("chore", _) => "update project setup",
+        ("refactor", Some("analysis")) => "centralize status and path classification",
         _ => "update workflow tooling",
     }
 }
 
-fn scope_for_path(path: &str) -> Option<&'static str> {
-    let normalized = path.replace('\\', "/").to_ascii_lowercase();
-    let file_name = normalized.rsplit('/').next().unwrap_or(normalized.as_str());
-
-    if normalized == "docs/agents.md" {
-        return Some("agents");
-    }
-
-    if is_skill_path(&normalized)
-        || normalized.starts_with("evals/")
-        || normalized == "tests/smoke-prompts.md"
-    {
-        return Some("skill");
-    }
-
-    if normalized.starts_with("packaging/scoop/") {
-        return Some("scoop");
-    }
-
-    if is_github_workflow_file(&normalized) || normalized == ".github/pull_request_template.md" {
-        return Some("github");
-    }
-
-    if normalized.contains("docs/product") {
-        return Some("product");
-    }
-
-    for scope in [
-        "scan", "doctor", "init", "run", "hooks", "github", "repo", "config",
-    ] {
-        if file_name.contains(scope) || normalized.contains(&format!("/{scope}/")) {
-            return Some(scope);
-        }
-    }
-
-    if file_name == "cli.rs" || normalized.contains("/src/cli.") {
-        return Some("cli");
-    }
-
-    None
-}
-
-fn is_docs_file(path: &str) -> bool {
-    let path = path.replace('\\', "/").to_ascii_lowercase();
-    path.starts_with("docs/")
-        || path == ".github/pull_request_template.md"
-        || path == "tests/smoke-prompts.md"
-        || path.ends_with(".md")
-        || path.ends_with(".mdx")
-        || path.ends_with(".rst")
-}
-
-fn is_test_file(path: &str) -> bool {
-    let path = path.replace('\\', "/").to_ascii_lowercase();
-    let file_name = path.rsplit('/').next().unwrap_or(path.as_str());
-    path.contains("/tests/")
-        || path.starts_with("tests/")
-        || path.contains("__tests__")
-        || file_name.ends_with("_test.rs")
-        || file_name.ends_with("_tests.rs")
-        || file_name.starts_with("test_")
-        || file_name.contains(".test.")
-        || file_name.contains(".spec.")
-}
-
-fn is_chore_file(path: &str) -> bool {
-    let path = path.replace('\\', "/").to_ascii_lowercase();
-    let file_name = path.rsplit('/').next().unwrap_or(path.as_str());
-    matches!(
-        file_name,
-        "cargo.toml"
-            | "cargo.lock"
-            | "package.json"
-            | "package-lock.json"
-            | "pnpm-lock.yaml"
-            | "yarn.lock"
-            | ".gitignore"
-            | ".gitattributes"
-            | "rust-toolchain.toml"
-            | "rustfmt.toml"
-    ) || (path.starts_with(".github/") && path != ".github/pull_request_template.md")
-        || path.ends_with(".yml")
-        || path.ends_with(".yaml")
-        || path.ends_with(".toml")
-        || path.ends_with(".json")
-}
-
 fn is_feature_signal(file: &ChangedFile) -> bool {
-    let path = file.path.replace('\\', "/").to_ascii_lowercase();
-    let file_name = path.rsplit('/').next().unwrap_or(path.as_str());
-    let added = file.status.contains('A') || file.status == "??";
-
-    file_name == "cli.rs"
-        || path.contains("/src/")
-        || is_skill_path(&path)
-        || path.starts_with("evals/")
-        || (added && (path.ends_with(".rs") || path.ends_with(".ts") || path.ends_with(".tsx")))
-}
-
-fn is_github_workflow_file(path: &str) -> bool {
-    path.replace('\\', "/")
-        .to_ascii_lowercase()
-        .starts_with(".github/workflows/")
-}
-
-fn is_skill_repo_file(path: &str) -> bool {
-    let path = path.replace('\\', "/").to_ascii_lowercase();
-    is_readme_file(&path)
-        || is_skill_path(&path)
-        || path.starts_with("evals/")
-        || path == "tests/smoke-prompts.md"
-}
-
-fn is_skill_path(path: &str) -> bool {
-    let mut parts = path.split('/');
-    matches!(parts.next(), Some("skills"))
-        && parts.next().is_some_and(|skill| !skill.is_empty())
-        && parts.next().is_some()
-}
-
-fn is_readme_file(path: &str) -> bool {
-    path.replace('\\', "/").to_ascii_lowercase() == "readme.md"
+    path_classification::is_feature_signal(&file.status, &file.path)
 }
 
 fn quote_paths(paths: &[&str]) -> String {
@@ -375,7 +270,11 @@ mod tests {
 
     #[test]
     fn parses_porcelain_changed_files() {
-        let files = parse_porcelain(" M docs/product.md\n?? crates/koba/src/github.rs\nR  old.rs -> crates/koba/src/run_checks.rs\n");
+        let entries = git_status::parse_porcelain_z(
+            b" M docs/product.md\0?? crates/koba/src/github.rs\0R  crates/koba/src/run_checks.rs\0old.rs\0",
+        )
+        .unwrap();
+        let files = changed_files_from_status(&entries);
 
         assert_eq!(files[0], file("M", "docs/product.md"));
         assert_eq!(files[1], file("??", "crates/koba/src/github.rs"));
@@ -507,6 +406,78 @@ mod tests {
         assert_eq!(
             suggestion.message,
             "docs(github): update GitHub documentation"
+        );
+    }
+
+    #[test]
+    fn suggests_koba_source_module_scopes() {
+        assert_eq!(
+            suggest(&[file("M", "crates/koba/src/changes.rs")])
+                .unwrap()
+                .message,
+            "feat(changes): review working tree changes"
+        );
+        assert_eq!(
+            suggest(&[file("M", "crates/koba/src/suggest_commit.rs")])
+                .unwrap()
+                .message,
+            "feat(commit): sharpen path-based scope inference"
+        );
+        assert_eq!(
+            suggest(&[file("M", "crates/koba/src/output.rs")])
+                .unwrap()
+                .message,
+            "feat(output): improve terminal rendering"
+        );
+        assert_eq!(
+            suggest(&[file("M", "crates/koba/src/pr.rs")])
+                .unwrap()
+                .message,
+            "feat(pr): update PR draft helper"
+        );
+    }
+
+    #[test]
+    fn suggests_analysis_refactor_for_shared_modules_and_consumers() {
+        let suggestion = suggest(&[
+            file("A", "crates/koba/src/git_status.rs"),
+            file("A", "crates/koba/src/path_classification.rs"),
+            file("M", "crates/koba/src/changes.rs"),
+            file("M", "crates/koba/src/suggest_commit.rs"),
+            file("M", "crates/koba/src/pr.rs"),
+        ])
+        .unwrap();
+
+        assert_eq!(
+            suggestion.message,
+            "refactor(analysis): centralize status and path classification"
+        );
+        assert!(suggestion.note.is_none());
+    }
+
+    #[test]
+    fn render_lists_every_untracked_file_used_in_recommended_add_command() {
+        let entries = git_status::parse_porcelain_z(
+            b"?? crates/koba/src/git_status.rs\0?? crates/koba/src/path_classification.rs\0",
+        )
+        .unwrap();
+        let files = changed_files_from_status(&entries);
+        let output = render(&files);
+
+        assert!(output.contains("[ok]     2 files"));
+        assert!(output.contains("?? crates/koba/src/git_status.rs"));
+        assert!(output.contains("?? crates/koba/src/path_classification.rs"));
+        assert!(output.contains("\"crates/koba/src/git_status.rs\""));
+        assert!(output.contains("\"crates/koba/src/path_classification.rs\""));
+    }
+
+    #[test]
+    fn isolated_changes_module_still_suggests_changes_scope() {
+        let suggestion = suggest(&[file("M", "crates/koba/src/changes.rs")]).unwrap();
+
+        assert_eq!(
+            suggestion.message,
+            "feat(changes): review working tree changes"
         );
     }
 }

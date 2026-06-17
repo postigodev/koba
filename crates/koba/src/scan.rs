@@ -53,17 +53,30 @@ impl ScanReport {
     }
 
     fn render_project(&self, output: &mut String) {
+        let mut rows = vec![output::row(Status::Ok, "Primary profile")
+            .value(primary_profile(&self.workflow, &self.agent_skill))];
+
+        if self.workflow.cargo_toml {
+            rows.push(output::row(Status::Ok, "Rust workspace"));
+        }
+        if self.workflow.package_json {
+            rows.push(output::row(Status::Ok, "Node/TypeScript").value("package.json"));
+        }
+        if self.workflow.pyproject_toml {
+            rows.push(output::row(Status::Ok, "Python").value("pyproject.toml"));
+        }
+
         if !self.agent_skill.detected() {
+            output::section(output, "Project", &rows);
             return;
         }
 
-        let mut rows = vec![
-            output::row(Status::Ok, "Profile").value("agent-skill"),
+        rows.push(
             output::row(Status::Ok, "Skills").value(self.agent_skill.skills.len().to_string()),
-        ];
+        );
 
         for skill in &self.agent_skill.skills {
-            rows.push(output::row(Status::Ok, "Skill").value(&skill.name));
+            rows.push(output::row(Status::Ok, "Agent Skill").value(&skill.name));
             rows.push(if skill.references_dir {
                 output::row(Status::Ok, "References").value("detected")
             } else {
@@ -131,7 +144,17 @@ impl ScanReport {
     fn render_workflow(&self, output: &mut String) {
         let mut rows = vec![file_row(self.workflow.koba_yml, "koba.yml")];
 
-        if !self.agent_skill.detected() {
+        if self.agent_skill.detected() {
+            if self.workflow.package_json {
+                rows.push(file_row(true, "package.json"));
+            }
+            if self.workflow.cargo_toml {
+                rows.push(file_row(true, "Cargo.toml"));
+            }
+            if self.workflow.pyproject_toml {
+                rows.push(file_row(true, "pyproject.toml"));
+            }
+        } else if !is_pure_agent_skill_repo(&self.workflow, &self.agent_skill) {
             rows.extend([
                 file_row(self.workflow.package_json, "package.json"),
                 file_row(self.workflow.cargo_toml, "Cargo.toml"),
@@ -232,6 +255,33 @@ fn config_row(present: bool, label: &str) -> StatusRow {
     } else {
         output::row(Status::Warn, label).value("not configured")
     }
+}
+
+fn primary_profile(workflow: &WorkflowFiles, agent_skill: &AgentSkillFiles) -> &'static str {
+    let markers = [
+        workflow.cargo_toml,
+        workflow.package_json,
+        workflow.pyproject_toml,
+    ]
+    .into_iter()
+    .filter(|present| *present)
+    .count();
+
+    match markers {
+        0 if agent_skill.detected() => "agent-skill",
+        0 => "custom",
+        1 if workflow.cargo_toml => "rust-cli",
+        1 if workflow.package_json => "node",
+        1 if workflow.pyproject_toml => "python",
+        _ => "mixed",
+    }
+}
+
+fn is_pure_agent_skill_repo(workflow: &WorkflowFiles, agent_skill: &AgentSkillFiles) -> bool {
+    agent_skill.detected()
+        && !workflow.cargo_toml
+        && !workflow.package_json
+        && !workflow.pyproject_toml
 }
 
 #[cfg(test)]
@@ -375,9 +425,10 @@ mod tests {
 
         let rendered = report.render();
 
-        assert!(rendered.contains("Profile        agent-skill"));
-        assert!(rendered.contains("Skill          hoi4-modding"));
-        assert!(rendered.contains("Smoke prompts  tests/smoke-prompts.md"));
+        assert!(rendered.contains("Primary profile  agent-skill"));
+        assert!(rendered.contains("Agent Skill      hoi4-modding"));
+        assert!(rendered.contains("Smoke prompts"));
+        assert!(rendered.contains("tests/smoke-prompts.md"));
         assert!(!rendered.contains("package.json"));
         assert!(!rendered.contains("Cargo.toml"));
         assert!(!rendered.contains("pyproject.toml"));
@@ -397,10 +448,28 @@ mod tests {
         let rendered = report.render();
 
         assert_eq!(report.agent_skill.skills.len(), 2);
-        assert!(rendered.contains("Profile        agent-skill"));
-        assert!(rendered.contains("Skill          hoi4-modding"));
-        assert!(rendered.contains("Skill          rust-cli-review"));
+        assert!(rendered.contains("Primary profile  agent-skill"));
+        assert!(rendered.contains("Agent Skill      hoi4-modding"));
+        assert!(rendered.contains("Agent Skill      rust-cli-review"));
         assert!(!rendered.contains("no supported project manifest"));
+    }
+
+    #[test]
+    fn mixed_rust_and_agent_skill_repo_shows_both_surfaces() {
+        let fixture = TempTree::new();
+        fixture.file("Cargo.toml");
+        fixture.file("README.md");
+        fixture.file("skills/koba/SKILL.md");
+        fixture.dir("skills/koba/references");
+
+        let report = ScanReport::from_cwd(fixture.path().to_path_buf());
+        let rendered = report.render();
+
+        assert!(rendered.contains("Primary profile  rust-cli"));
+        assert!(rendered.contains("Rust workspace"));
+        assert!(rendered.contains("Agent Skill      koba"));
+        assert!(rendered.contains("References       detected"));
+        assert!(rendered.contains("Cargo.toml"));
     }
 
     struct TempTree {
