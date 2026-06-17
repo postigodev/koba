@@ -284,7 +284,7 @@ fn diagnose_project(
         ));
         diagnostics.push(Diagnostic::warn(
             Section::Project,
-            "Rust workflow checks are not modeled yet",
+            "Rust checks are recommended but not configured in koba.yml",
             "Consider checks such as `cargo fmt --check` and `cargo test`",
         ));
     }
