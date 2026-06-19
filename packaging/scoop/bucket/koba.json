@@ -1,12 +1,12 @@
 {
-    "version": "0.1.5",
+    "version": "0.1.6",
     "description": "Local-first Git workflow configurator for real repositories.",
     "homepage": "https://github.com/postigodev/koba",
     "license": "MIT",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/postigodev/koba/releases/download/v0.1.5/koba-x86_64-pc-windows-msvc.zip",
-            "hash": "2de6c26934b83d0f9d4686aaed1cb875bab01c5f1d99582a9ba8bf1c2bbec6e0"
+            "url": "https://github.com/postigodev/koba/releases/download/v0.1.6/koba-x86_64-pc-windows-msvc.zip",
+            "hash": "0fae1fb0ec233270e406eb65c6187a09a7dfea0b9b947de2abb6d28530487d18"
         }
     },
     "bin": "koba.exe",
