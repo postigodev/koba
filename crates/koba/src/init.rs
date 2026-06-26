@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     output::{self, Status},
-    repo::{self, AgentSkillFiles, RepoFiles},
+    repo::{self, RepoFiles},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,25 +63,15 @@ pub struct WorkflowContract {
 }
 
 impl WorkflowContract {
-    fn from_profile(profile: Profile, agent_skill: &AgentSkillFiles, koba_workspace: bool) -> Self {
+    fn from_repo(profile: Profile, files: &RepoFiles, koba_workspace: bool) -> Self {
+        let agent_skill = &files.agent_skill;
         match profile {
             Profile::RustCli => {
-                let mut pre_commit = vec!["cargo fmt --check"];
-                let mut pre_push = vec!["cargo test"];
+                let mut pre_commit = rust_checks(koba_workspace);
+                let pre_push = Vec::new();
 
                 if agent_skill.detected() {
-                    pre_commit.push(if koba_workspace {
-                        "cargo check -p koba"
-                    } else {
-                        "cargo check"
-                    });
-                    pre_commit.push(if koba_workspace {
-                        "cargo test -p koba"
-                    } else {
-                        "cargo test"
-                    });
                     pre_commit.push("\"npx skills add . --list\"");
-                    pre_push.clear();
                 }
 
                 Self {
@@ -123,17 +113,31 @@ impl WorkflowContract {
                     notes,
                 }
             }
-            Profile::Mixed => Self {
-                profile,
-                pre_commit: Vec::new(),
-                pre_push: Vec::new(),
-                notes: vec![
-                    "Mixed project detected. Add explicit checks after reviewing the stack.",
-                ],
-            },
+            Profile::Mixed => {
+                let mut pre_commit = Vec::new();
+
+                if files.workflow.cargo_toml {
+                    pre_commit.extend(rust_checks(koba_workspace));
+                }
+                if agent_skill.detected() {
+                    pre_commit.push("\"npx skills add . --list\"");
+                }
+                if pre_commit.is_empty() {
+                    pre_commit.push("\"git diff --check\"");
+                }
+
+                Self {
+                    profile,
+                    pre_commit,
+                    pre_push: Vec::new(),
+                    notes: vec![
+                        "Mixed project detected. Review generated checks before applying them.",
+                    ],
+                }
+            }
             Profile::Custom => Self {
                 profile,
-                pre_commit: Vec::new(),
+                pre_commit: vec!["\"git diff --check\""],
                 pre_push: Vec::new(),
                 notes: vec![
                     "No known project marker detected. Add checks that match this repository.",
@@ -244,8 +248,7 @@ pub fn execute(cwd: &Path, options: InitOptions) -> Result<InitOutcome, String> 
     let files = repo::discover(cwd, None);
     let profile = select_profile(&files);
     let koba_workspace = cwd.join("crates").join("koba").join("Cargo.toml").is_file();
-    let yaml =
-        WorkflowContract::from_profile(profile, &files.agent_skill, koba_workspace).render_yaml();
+    let yaml = WorkflowContract::from_repo(profile, &files, koba_workspace).render_yaml();
     let path = cwd.join("koba.yml");
 
     if !options.apply {
@@ -304,10 +307,26 @@ fn render_check_list(yaml: &mut String, key: &str, checks: &[&str]) {
     }
 }
 
+fn rust_checks(koba_workspace: bool) -> Vec<&'static str> {
+    vec![
+        "cargo fmt --check",
+        if koba_workspace {
+            "cargo check -p koba"
+        } else {
+            "cargo check"
+        },
+        if koba_workspace {
+            "cargo test -p koba"
+        } else {
+            "cargo test"
+        },
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo::WorkflowFiles;
+    use crate::repo::{AgentSkillFiles, WorkflowFiles};
     use std::{
         fs,
         time::{SystemTime, UNIX_EPOCH},

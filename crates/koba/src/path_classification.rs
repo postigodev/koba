@@ -168,38 +168,6 @@ pub fn concept_for_path(path: &str) -> ChangeConcept {
     }
 }
 
-pub fn commit_scope_for_path(path: &str) -> Option<&'static str> {
-    let normalized = normalize(path);
-    if normalized == "tests/smoke-prompts.md" {
-        return Some("skill");
-    }
-    if is_analysis_infrastructure(&normalized) {
-        return Some("analysis");
-    }
-    if normalized == "crates/koba/tests/cli.rs" {
-        return Some("cli");
-    }
-
-    match classify(path) {
-        PathClass::Docs if normalized == "docs/agents.md" => Some("agents"),
-        PathClass::AgentSkill { .. } | PathClass::Evals => Some("skill"),
-        PathClass::ScoopManifest => Some("scoop"),
-        PathClass::GithubWorkflow | PathClass::GithubTemplate => Some("github"),
-        PathClass::Docs if normalized.contains("docs/product") => Some("product"),
-        PathClass::RustSource {
-            module: Some(module),
-        } => Some(module.scope()),
-        _ => None,
-    }
-}
-
-pub fn scope_priority() -> [&'static str; 17] {
-    [
-        "analysis", "agents", "skill", "scoop", "github", "changes", "commit", "output", "pr",
-        "hooks", "run", "init", "doctor", "scan", "repo", "config", "cli",
-    ]
-}
-
 pub fn is_analysis_refactor_path_set<'a>(paths: impl IntoIterator<Item = &'a str>) -> bool {
     let paths = paths.into_iter().map(normalize).collect::<Vec<_>>();
     let has_infrastructure = paths.iter().any(|path| is_analysis_infrastructure(path));
@@ -207,15 +175,19 @@ pub fn is_analysis_refactor_path_set<'a>(paths: impl IntoIterator<Item = &'a str
 
     has_infrastructure
         && has_consumer
-        && paths
-            .iter()
-            .all(|path| is_analysis_infrastructure(path) || is_analysis_consumer(path))
+        && paths.iter().all(|path| {
+            is_analysis_infrastructure(path)
+                || is_analysis_consumer(path)
+                || is_weak_support_file(path)
+        })
 }
 
 fn is_analysis_infrastructure(path: &str) -> bool {
     matches!(
         normalize(path).as_str(),
-        "crates/koba/src/git_status.rs" | "crates/koba/src/path_classification.rs"
+        "crates/koba/src/analysis.rs"
+            | "crates/koba/src/git_status.rs"
+            | "crates/koba/src/path_classification.rs"
     )
 }
 
@@ -253,51 +225,6 @@ pub fn is_test_file(path: &str) -> bool {
         || file_name.starts_with("test_")
         || file_name.contains(".test.")
         || file_name.contains(".spec.")
-}
-
-pub fn is_chore_file(path: &str) -> bool {
-    let path = normalize(path);
-    let file_name = path.rsplit('/').next().unwrap_or(path.as_str());
-    matches!(
-        file_name,
-        "cargo.toml"
-            | "cargo.lock"
-            | "package.json"
-            | "package-lock.json"
-            | "pnpm-lock.yaml"
-            | "yarn.lock"
-            | ".gitignore"
-            | ".gitattributes"
-            | "rust-toolchain.toml"
-            | "rustfmt.toml"
-    ) || (path.starts_with(".github/") && path != ".github/pull_request_template.md")
-        || path.ends_with(".yml")
-        || path.ends_with(".yaml")
-        || path.ends_with(".toml")
-        || path.ends_with(".json")
-}
-
-pub fn is_feature_signal(status: &str, path: &str) -> bool {
-    let path = normalize(path);
-    let file_name = path.rsplit('/').next().unwrap_or(path.as_str());
-    let added = status.contains('A') || status == "??";
-
-    file_name == "cli.rs"
-        || (matches!(classify(&path), PathClass::RustSource { .. }) && path.contains("/src/"))
-        || matches!(
-            classify(&path),
-            PathClass::AgentSkill { .. } | PathClass::Evals
-        )
-        || path.starts_with("evals/")
-        || (added && (path.ends_with(".rs") || path.ends_with(".ts") || path.ends_with(".tsx")))
-}
-
-pub fn is_skill_repo_file(path: &str) -> bool {
-    let path = normalize(path);
-    is_readme(&path)
-        || is_agent_skill_file(&path)
-        || path.starts_with("evals/")
-        || path == "tests/smoke-prompts.md"
 }
 
 pub fn is_agent_skill_file(path: &str) -> bool {
@@ -373,26 +300,6 @@ pub fn normalize(path: &str) -> String {
     path.replace('\\', "/").to_ascii_lowercase()
 }
 
-impl KobaModule {
-    fn scope(self) -> &'static str {
-        match self {
-            KobaModule::Changes => "changes",
-            KobaModule::Commit => "commit",
-            KobaModule::Output => "output",
-            KobaModule::Pr => "pr",
-            KobaModule::Hooks => "hooks",
-            KobaModule::Github => "github",
-            KobaModule::RunChecks => "run",
-            KobaModule::Init => "init",
-            KobaModule::Doctor => "doctor",
-            KobaModule::Scan => "scan",
-            KobaModule::Repo => "repo",
-            KobaModule::Config => "config",
-            KobaModule::Cli => "cli",
-        }
-    }
-}
-
 fn agent_skill_path(path: &str) -> Option<(String, AgentSkillSurface)> {
     let mut parts = path.split('/');
     if parts.next() != Some("skills") {
@@ -450,8 +357,8 @@ mod tests {
     #[test]
     fn classifies_generic_agent_skill_docs() {
         assert_eq!(
-            commit_scope_for_path("skills/hoi4-modding/SKILL.md"),
-            Some("skill")
+            concept_for_path("skills/hoi4-modding/SKILL.md"),
+            ChangeConcept::Skill
         );
         assert!(matches!(
             classify("skills/hoi4-modding/references/workflows.md"),
@@ -478,8 +385,8 @@ mod tests {
             ChangeConcept::Skill
         );
         assert_eq!(
-            commit_scope_for_path("tests/smoke-prompts.md"),
-            Some("skill")
+            concept_for_path("tests/smoke-prompts.md"),
+            ChangeConcept::Skill
         );
     }
 
@@ -491,8 +398,8 @@ mod tests {
         );
         assert_eq!(classify("bucket/koba.json"), PathClass::ScoopManifest);
         assert_eq!(
-            commit_scope_for_path("packaging/scoop/bucket/koba.json"),
-            Some("scoop")
+            concept_for_path("packaging/scoop/bucket/koba.json"),
+            ChangeConcept::Scoop
         );
     }
 
@@ -511,29 +418,29 @@ mod tests {
     #[test]
     fn classifies_koba_source_module_scopes() {
         assert_eq!(
-            commit_scope_for_path("crates/koba/src/changes.rs"),
-            Some("changes")
+            concept_for_path("crates/koba/src/changes.rs"),
+            ChangeConcept::Changes
         );
         assert_eq!(
-            commit_scope_for_path("crates/koba/src/suggest_commit.rs"),
-            Some("commit")
+            concept_for_path("crates/koba/src/suggest_commit.rs"),
+            ChangeConcept::CommitEngine
         );
         assert_eq!(
-            commit_scope_for_path("crates/koba/src/output.rs"),
-            Some("output")
+            concept_for_path("crates/koba/src/output.rs"),
+            ChangeConcept::Output
         );
-        assert_eq!(commit_scope_for_path("crates/koba/src/pr.rs"), Some("pr"));
+        assert_eq!(concept_for_path("crates/koba/src/pr.rs"), ChangeConcept::Pr);
         assert_eq!(
-            commit_scope_for_path("crates/koba/src/hooks.rs"),
-            Some("hooks")
+            concept_for_path("crates/koba/src/hooks.rs"),
+            ChangeConcept::Hooks
         );
     }
 
     #[test]
     fn normalizes_windows_path_separators() {
         assert_eq!(
-            commit_scope_for_path("skills\\hoi4-modding\\SKILL.md"),
-            Some("skill")
+            concept_for_path("skills\\hoi4-modding\\SKILL.md"),
+            ChangeConcept::Skill
         );
     }
 

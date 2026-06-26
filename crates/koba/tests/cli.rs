@@ -252,6 +252,59 @@ fn cli_changes_reports_clean_git_tree() {
 }
 
 #[test]
+fn cli_changes_coherent_tree_renders_one_recommended_commit() {
+    let fixture = TempTree::new();
+    fixture.git_init();
+    fixture.file("crates/koba/src/output.rs");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_koba"))
+        .arg("changes")
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run koba binary");
+
+    assert!(
+        output.status.success(),
+        "expected success, got status {:?}, stderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Recommended commit"));
+    assert!(!stdout.contains("Commit groups"));
+    assert!(stdout.contains("feat(output): improve terminal rendering"));
+    assert!(stdout.contains("git add -- \"crates/koba/src/output.rs\""));
+}
+
+#[test]
+fn cli_changes_mixed_tree_renders_groups_and_split_warning() {
+    let fixture = TempTree::new();
+    fixture.git_init();
+    fixture.file("skills/koba/SKILL.md");
+    fixture.file("crates/koba/src/output.rs");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_koba"))
+        .arg("changes")
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run koba binary");
+
+    assert!(
+        output.status.success(),
+        "expected success, got status {:?}, stderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Commit groups"));
+    assert!(stdout.contains("working tree appears to contain multiple commit concepts"));
+    assert!(stdout.contains("feat(output): improve terminal rendering"));
+    assert!(stdout.contains("docs(skill): update skill documentation"));
+}
+
+#[test]
 fn cli_suggest_commit_recommends_commands_without_staging() {
     let fixture = TempTree::new();
     fixture.git_init();
@@ -288,6 +341,38 @@ fn cli_suggest_commit_recommends_commands_without_staging() {
 }
 
 #[test]
+fn cli_suggest_commit_matches_changes_primary_plan() {
+    let fixture = TempTree::new();
+    fixture.git_init();
+    fixture.file("crates/koba/src/git_status.rs");
+    fixture.file("crates/koba/src/path_classification.rs");
+    fixture.file("crates/koba/src/changes.rs");
+    fixture.file("crates/koba/src/suggest_commit.rs");
+    fixture.file("crates/koba/src/pr.rs");
+
+    let changes = Command::new(env!("CARGO_BIN_EXE_koba"))
+        .arg("changes")
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run koba binary");
+    let suggest = Command::new(env!("CARGO_BIN_EXE_koba"))
+        .arg("suggest-commit")
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run koba binary");
+
+    assert!(changes.status.success());
+    assert!(suggest.status.success());
+
+    let changes_stdout = String::from_utf8_lossy(&changes.stdout);
+    let suggest_stdout = String::from_utf8_lossy(&suggest.stdout);
+    let message = "refactor(analysis): centralize status and path classification";
+
+    assert!(changes_stdout.contains(message));
+    assert!(suggest_stdout.contains(message));
+}
+
+#[test]
 fn cli_pr_dry_run_previews_without_writing() {
     let fixture = TempTree::new();
     fixture.git_init();
@@ -312,6 +397,53 @@ fn cli_pr_dry_run_previews_without_writing() {
     assert!(stdout.contains("Suggested title"));
     assert!(stdout.contains("Body preview"));
     assert!(stdout.contains("docs/change.md"));
+}
+
+#[test]
+fn cli_pr_title_matches_changes_primary_plan() {
+    let fixture = TempTree::new();
+    fixture.git_init();
+    fixture.file("crates/koba/src/git_status.rs");
+    fixture.file("crates/koba/src/path_classification.rs");
+    fixture.file("crates/koba/src/changes.rs");
+    fixture.file("crates/koba/src/suggest_commit.rs");
+    fixture.file("crates/koba/src/pr.rs");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_koba"))
+        .args(["pr", "--dry-run"])
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run koba binary");
+
+    assert!(output.status.success());
+    assert!(!fixture.path().join(".koba/pr-body.md").exists());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Suggested title"));
+    assert!(stdout.contains("refactor(analysis): centralize status and path classification"));
+}
+
+#[test]
+fn cli_init_rust_agent_skill_repo_includes_both_check_surfaces() {
+    let fixture = TempTree::new();
+    fixture.file("Cargo.toml");
+    fixture.file("skills/koba/SKILL.md");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_koba"))
+        .arg("init")
+        .current_dir(fixture.path())
+        .output()
+        .expect("failed to run koba binary");
+
+    assert!(output.status.success());
+    assert!(!fixture.path().join("koba.yml").exists());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("profile: rust-cli"));
+    assert!(stdout.contains("- cargo fmt --check"));
+    assert!(stdout.contains("- cargo check"));
+    assert!(stdout.contains("- cargo test"));
+    assert!(stdout.contains("- \"npx skills add . --list\""));
 }
 
 struct TempTree {

@@ -5,9 +5,9 @@ use std::{
 };
 
 use crate::{
+    analysis::{self, WorkingTreeAnalysis},
     git, git_status,
     output::{self, Status},
-    suggest_commit::{self, ChangedFile},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,8 +62,7 @@ pub fn execute(cwd: &Path, options: PrOptions) -> Result<PrOutcome, String> {
         return Err("not inside a Git repository".to_owned());
     }
 
-    let changed_files =
-        suggest_commit::changed_files_from_status(&git_status::status_entries(cwd)?);
+    let analysis = analysis::analyze(cwd, git_status::status_entries(cwd)?);
     let (base_branch, commits) = git::commits_since_base(cwd)
         .map(|(base, commits)| (Some(base), commits))
         .unwrap_or_else(|| (None, Vec::new()));
@@ -71,7 +70,7 @@ pub fn execute(cwd: &Path, options: PrOptions) -> Result<PrOutcome, String> {
     let draft = build_draft(
         git_info.branch.as_deref(),
         base_branch.as_deref(),
-        &changed_files,
+        &analysis,
         &commits,
         template.as_deref(),
     );
@@ -100,20 +99,22 @@ pub fn execute(cwd: &Path, options: PrOptions) -> Result<PrOutcome, String> {
 pub fn build_draft(
     branch: Option<&str>,
     base_branch: Option<&str>,
-    changed_files: &[ChangedFile],
+    analysis: &WorkingTreeAnalysis,
     commits: &[String],
     template: Option<&str>,
 ) -> PrDraft {
-    let title = suggest_commit::suggest(changed_files)
-        .map(|suggestion| suggestion.message)
+    let title = analysis
+        .primary_plan
+        .as_ref()
+        .map(|plan| plan.message.clone())
         .or_else(|| commits.first().cloned())
         .unwrap_or_else(|| "chore: prepare pull request".to_owned());
-    let source_notes = source_notes(branch, base_branch, changed_files, commits);
+    let source_notes = source_notes(branch, base_branch, analysis, commits);
     let sections = template
         .map(template_sections)
         .filter(|sections| !sections.is_empty())
         .unwrap_or_else(default_sections);
-    let body = render_body(&sections, changed_files, commits);
+    let body = render_body(&sections, analysis, commits);
 
     PrDraft {
         title,
@@ -129,7 +130,7 @@ pub fn build_draft(
 fn source_notes(
     branch: Option<&str>,
     base_branch: Option<&str>,
-    changed_files: &[ChangedFile],
+    analysis: &WorkingTreeAnalysis,
     commits: &[String],
 ) -> Vec<String> {
     let mut notes = Vec::new();
@@ -146,10 +147,20 @@ fn source_notes(
         ),
     }
 
-    if changed_files.is_empty() {
+    if analysis.is_clean {
         notes.push("No uncommitted changes detected.".to_owned());
     } else {
-        notes.push(format!("{} changed file(s) detected.", changed_files.len()));
+        notes.push(format!(
+            "{} changed file(s) detected.",
+            analysis.files.len()
+        ));
+    }
+
+    if analysis.commit_plans.len() > 1 {
+        notes.push(format!(
+            "{} commit group(s) detected; consider splitting before opening a PR.",
+            analysis.commit_plans.len()
+        ));
     }
 
     if !commits.is_empty() {
@@ -159,7 +170,7 @@ fn source_notes(
     notes
 }
 
-fn render_body(sections: &[String], changed_files: &[ChangedFile], commits: &[String]) -> String {
+fn render_body(sections: &[String], analysis: &WorkingTreeAnalysis, commits: &[String]) -> String {
     let mut body = String::new();
     let has_changes = sections
         .iter()
@@ -168,14 +179,14 @@ fn render_body(sections: &[String], changed_files: &[ChangedFile], commits: &[St
     for section in sections {
         writeln!(body, "## {section}").unwrap();
         writeln!(body).unwrap();
-        write_section_content(&mut body, section, changed_files, commits);
+        write_section_content(&mut body, section, analysis, commits);
         writeln!(body).unwrap();
     }
 
-    if !has_changes && (!changed_files.is_empty() || !commits.is_empty()) {
+    if !has_changes && (!analysis.files.is_empty() || !commits.is_empty()) {
         writeln!(body, "## Changes").unwrap();
         writeln!(body).unwrap();
-        write_section_content(&mut body, "Changes", changed_files, commits);
+        write_section_content(&mut body, "Changes", analysis, commits);
         writeln!(body).unwrap();
     }
 
@@ -185,7 +196,7 @@ fn render_body(sections: &[String], changed_files: &[ChangedFile], commits: &[St
 fn write_section_content(
     body: &mut String,
     section: &str,
-    changed_files: &[ChangedFile],
+    analysis: &WorkingTreeAnalysis,
     commits: &[String],
 ) {
     match normalize_section(section).as_str() {
@@ -193,15 +204,24 @@ fn write_section_content(
             writeln!(body, "Describe what changed and why.").unwrap();
         }
         "changes" => {
-            if commits.is_empty() && changed_files.is_empty() {
+            if commits.is_empty() && analysis.files.is_empty() {
                 writeln!(body, "- No local changes detected yet.").unwrap();
                 return;
             }
             for commit in commits {
                 writeln!(body, "- {commit}").unwrap();
             }
-            for file in changed_files {
-                writeln!(body, "- {} {}", file.status, file.path).unwrap();
+            if !analysis.commit_plans.is_empty() {
+                for plan in &analysis.commit_plans {
+                    writeln!(body, "- {}", plan.message).unwrap();
+                    for file in &plan.files {
+                        writeln!(body, "  - {file}").unwrap();
+                    }
+                }
+            } else {
+                for file in &analysis.files {
+                    writeln!(body, "- {} {}", file.short_status(), file.path).unwrap();
+                }
             }
         }
         "checks run" => {
@@ -332,14 +352,18 @@ mod tests {
     use super::*;
     use std::{
         fs,
+        path::Path as StdPath,
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    fn file(status: &str, path: &str) -> ChangedFile {
-        ChangedFile {
-            status: status.to_owned(),
-            path: path.to_owned(),
-        }
+    fn analysis_for(files: &[(&str, &str)]) -> WorkingTreeAnalysis {
+        analysis::analyze(
+            StdPath::new("."),
+            files
+                .iter()
+                .map(|(status, path)| analysis::WorkingTreeFile::from_status(status, *path))
+                .collect(),
+        )
     }
 
     #[test]
@@ -347,14 +371,15 @@ mod tests {
         let draft = build_draft(
             Some("feature/pr"),
             None,
-            &[file("A", "crates/koba/src/pr.rs")],
+            &analysis_for(&[("A ", "crates/koba/src/pr.rs")]),
             &[],
             None,
         );
 
         assert_eq!(draft.title, "feat(pr): update PR draft helper");
         assert!(draft.body.contains("## Summary"));
-        assert!(draft.body.contains("- A crates/koba/src/pr.rs"));
+        assert!(draft.body.contains("- feat(pr): update PR draft helper"));
+        assert!(draft.body.contains("  - crates/koba/src/pr.rs"));
         assert!(draft
             .source_notes
             .iter()
@@ -366,7 +391,7 @@ mod tests {
         let draft = build_draft(
             Some("feature/pr"),
             Some("origin/main"),
-            &[file("M", "docs/product.md")],
+            &analysis_for(&[(" M", "docs/product.md")]),
             &["docs(product): update product docs".to_owned()],
             Some("## Summary\n\n## Screenshots or demo\n\n## Notes for reviewer\n"),
         );
@@ -382,13 +407,30 @@ mod tests {
             b"?? crates/koba/src/git_status.rs\0?? crates/koba/src/path_classification.rs\0",
         )
         .unwrap();
-        let changed_files = suggest_commit::changed_files_from_status(&entries);
-        let draft = build_draft(Some("analysis/refactor"), None, &changed_files, &[], None);
+        let analysis = analysis::analyze(StdPath::new("."), entries);
+        let draft = build_draft(Some("analysis/refactor"), None, &analysis, &[], None);
 
-        assert!(draft.body.contains("- ?? crates/koba/src/git_status.rs"));
+        assert!(draft.body.contains("crates/koba/src/git_status.rs"));
         assert!(draft
             .body
-            .contains("- ?? crates/koba/src/path_classification.rs"));
+            .contains("crates/koba/src/path_classification.rs"));
+    }
+
+    #[test]
+    fn title_uses_shared_primary_plan() {
+        let analysis = analysis_for(&[
+            ("A ", "crates/koba/src/git_status.rs"),
+            ("A ", "crates/koba/src/path_classification.rs"),
+            (" M", "crates/koba/src/changes.rs"),
+            (" M", "crates/koba/src/suggest_commit.rs"),
+            (" M", "crates/koba/src/pr.rs"),
+        ]);
+        let draft = build_draft(Some("analysis/refactor"), None, &analysis, &[], None);
+
+        assert_eq!(
+            draft.title,
+            "refactor(analysis): centralize status and path classification"
+        );
     }
 
     #[test]
