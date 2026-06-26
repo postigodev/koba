@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## v0.1.7 - 2026-06-26
+
+### Improved
+
+- Added a shared internal working-tree analysis layer used by `koba changes`, `koba suggest-commit`, and `koba pr --dry-run`.
+- Improved `koba changes` so coherent trees show one recommended commit, while mixed trees show commit groups and split guidance.
+- Improved `koba suggest-commit` so recommended staging commands are derived from the same primary plan shown by `koba changes`.
+- Improved `koba pr --dry-run` so suggested PR titles and grouped change summaries reuse the same working-tree analysis.
+- Improved `koba init` check presets for Rust, Koba workspaces, Agent Skill surfaces, mixed repositories, and custom repositories.
+
+### Safety
+
+- Preserved recommend-only behavior for working-tree analysis, commit suggestions, and PR drafting.
+- No staging, committing, pushing, applying, or history rewriting behavior was added.
+
 ## v0.1.6 - 2026-06-16
 
 ### Improved
