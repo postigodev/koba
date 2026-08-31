@@ -33,8 +33,8 @@ Agents may:
 
 Agents must not:
 
-* Commit changes unless explicitly asked.
-* Rewrite history, rebase, squash, or force-push.
+* Stage, commit, push, rebase, squash, rewrite history, or force-push
+  unless the user's request explicitly authorizes that exact action.
 * Install unrelated dependencies.
 * Make large unrelated formatting changes.
 * Replace working implementation with speculative architecture.
