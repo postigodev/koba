@@ -17,4 +17,4 @@ scoop update koba
 
 ## Apps
 
-- `koba`: Local-first Git workflow configurator for real repositories.
+- `koba`: Local-first Git tool for turning messy working trees into clean commits.

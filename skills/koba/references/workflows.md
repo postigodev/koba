@@ -18,7 +18,9 @@ Decision points:
 - Is `koba.yml` missing or present?
 - Are missing `.github/` files relevant for this repository?
 
-## 2. Prepare A Commit Without Executing It
+## 2. Current Commit Preparation Without Execution
+
+The current release uses this recommend-only flow because Koba-native commit execution is not implemented yet. This is current behavior, not a permanent product boundary.
 
 ```sh
 koba changes
@@ -31,7 +33,9 @@ Use `koba changes` for the broad working-tree plan: changed-file counts, likely 
 
 Refuse to stage if the user only asked for a suggestion.
 
-## 3. Validate, Obtain Approval, And Commit
+## 3. Current Manual Validation And Commit Execution
+
+Until an approval-gated Koba-native commit flow exists, agents execute an explicitly authorized plan with scoped Git commands.
 
 ```sh
 koba changes
@@ -58,7 +62,9 @@ git add -- <approved-files>
 git commit -m "<approved-message>"
 ```
 
-Approval to run checks is not approval to commit. Approval to commit is not approval to push.
+Never replace the approved path list with broad staging such as `git add .`.
+
+Approval to run checks is not approval to stage. Approval to stage is not approval to commit. Approval to commit is not approval to push. The default commit workflow never pushes automatically.
 
 If the working tree changes between approval and staging, stop and ask.
 
@@ -170,9 +176,9 @@ git status --short
 koba suggest-commit
 ```
 
-Expected interpretation:
+Expected semantic interpretation:
 
-- One docs-oriented group, such as `docs(agents): update agent documentation`.
+- One docs-oriented commit suggestion. Exact wording is heuristic output, not a permanent contract.
 - `git diff --check` is relevant.
 - Rust, Node, or Python test suites are not automatically required for docs-only changes.
 
@@ -187,10 +193,10 @@ git diff -- crates/koba/src/suggest_commit.rs
 koba suggest-commit
 ```
 
-Expected interpretation:
+Expected semantic interpretation:
 
-- Skill docs form one group, such as `docs(skill): document workspace binary fallback`.
-- Commit-suggestion source forms another group, such as `feat(commit): sharpen path-based scope inference`.
+- Skill documentation forms one group.
+- Commit-suggestion source forms another group.
 - The working tree should be treated as mixed unless the diffs clearly prove one coherent change.
 
 Do not collapse the groups into one commit just because a single message is convenient.

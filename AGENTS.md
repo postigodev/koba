@@ -2,11 +2,15 @@
 
 ## Project
 
-Koba is a local-first Git workflow configurator.
+Koba is a local-first Git tool whose primary product thesis is:
 
-It helps repositories make their development workflow explicit, inspectable, and reproducible: commit conventions, hooks, smoke checks, PR templates, `.github/` infrastructure, branch rules, and repo hygiene.
+> **Koba turns a messy working tree into clean commits.**
 
-Koba is not a Git replacement. It is a workflow layer around Git and existing tools such as Husky, GitHub Actions, GitHub CLI, and native Git hooks.
+The current release analyzes working trees, plans commit groups, suggests deterministic/path-driven commit messages, and supports repository workflow infrastructure. Commit execution is still manual, and `koba commit` does not exist yet.
+
+The intended daily flow is deterministic analysis -> coherent commit groups -> accurate descriptions -> concise preview -> relevant checks -> explicit user approval -> scoped staging and commit creation. Koba remains a workflow layer around Git rather than a Git replacement.
+
+Supporting capabilities include configured checks, `koba.yml`, hooks, PR templates, `.github/` discovery, branch rules, and repository hygiene.
 
 ## Working Principles
 
@@ -97,7 +101,9 @@ When reporting, include:
 * Whether each command passed or failed.
 * Any failures and whether they are related to the change.
 
-## Git and Repository Safety
+## Contributor-Agent Git and Repository Safety
+
+This section governs an agent's own actions while contributing to Koba. It is distinct from the Koba product's approval-gated mutation model.
 
 Before editing:
 
@@ -112,7 +118,7 @@ git status --short
 git diff --stat
 ```
 
-Never commit by default.
+File edits are allowed only when the user's request authorizes them. Otherwise ask before applying writes. Never stage, commit, push, rebase, squash, rewrite history, or otherwise mutate repository history unless the user's request explicitly authorizes that exact action. Approval for one action does not authorize another.
 
 If a commit is appropriate, suggest the exact command using Conventional Commits:
 
@@ -130,9 +136,22 @@ Prefer surgical commits:
 
 ## Product Boundaries
 
-Koba should default to recommend-only behavior.
+Koba is local-first and conservative about mutation. The current release remains recommend-only for commit execution. The product direction permits narrowly scoped Git mutation only after showing the exact proposed action and receiving explicit user approval.
 
-Dangerous or mutating actions should require explicit flags or confirmation, especially:
+Product safety invariants:
+
+* never stage or commit silently
+* preview the exact paths and final commit message before mutation
+* limit staging and commit creation to the approved plan
+* never use broad staging such as `git add .` in the default commit workflow
+* never push automatically as part of the default commit workflow
+* never silently rebase, reset destructively, force-push, or rewrite history
+* treat approval for each operation independently
+* keep deterministic code responsible for Git-state analysis, grouping, checks, risk, and mutation safety
+
+Optional AI-backed description generation may be added later, but AI must not own grouping, mutation safety, or approval decisions.
+
+Other dangerous or mutating actions should also require an exact preview and explicit approval, especially:
 
 * installing hooks
 * overwriting `.github/` files
@@ -145,15 +164,23 @@ Koba should never store GitHub tokens. It should use existing Git, SSH, Git Cred
 
 ## Design Direction
 
-Core concepts:
+The intended commit-first responsibility boundaries are:
 
-* `koba.yml` is the repo workflow contract.
-* `scan` inspects the repository and discovers workflow infrastructure.
-* `doctor` diagnoses missing or inconsistent workflow pieces.
+1. deterministic analysis and planning own Git-state understanding, grouping, relevant checks, risk, and safety;
+2. commit-description generation describes an existing plan and may support multiple generators later; and
+3. preview, approval, and execution may stage and commit only the approved plan.
+
+Current and supporting capabilities:
+
+* `changes` analyzes the current working tree and recommends commit groups and checks.
+* `suggest-commit` currently proposes deterministic/path-driven Conventional Commit messages and scoped Git commands.
+* `scan` and `doctor` inspect and diagnose repository workflow infrastructure.
+* `koba.yml` supports configured checks and workflow behavior; it is not the entire product model.
 * `run` executes configured checks.
-* `hooks` installs or manages adapters such as native Git hooks or Husky.
-* `suggest-commit` proposes Conventional Commit messages and file groupings.
-* `pr` prepares PR titles/bodies and may later integrate with GitHub CLI.
+* `hooks` manages adapters such as native Git hooks or Husky.
+* `github template pr` and `pr` support pull-request infrastructure and drafting.
+
+Do not document `koba commit`, AI-backed generation, or a simplified CLI as implemented until the corresponding source exists.
 
 Prefer adapters over replacement:
 

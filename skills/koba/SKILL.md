@@ -1,11 +1,11 @@
 ---
 name: koba
-description: Use Koba to inspect Git workflow health, review working-tree changes, diagnose repository workflow infrastructure, preview checks, prepare surgical Conventional Commits, draft PRs, preview hooks, and review or initialize koba.yml. Trigger for Git workflow review, repository diagnostics, changed-file review, mixed working trees, checks, commit preparation, PR preparation, hooks, or koba.yml work. Require explicit approval before --apply, non-dry-run checks, staging, committing, pushing, opening PRs, or writing files.
+description: Use Koba's current CLI to inspect Git workflow health, review and group working-tree changes, preview checks, suggest surgical Conventional Commits, draft PRs, preview hooks, and review or initialize koba.yml. Trigger for repository diagnostics, changed-file review, mixed working trees, checks, commit preparation, PR preparation, hooks, or koba.yml work. Require explicit approval before --apply, non-dry-run checks, staging, committing, pushing, opening PRs, or writing files.
 ---
 
 # Koba
 
-Use the globally installed `koba` CLI to inspect and prepare Git workflow changes safely inside a repository. Koba recommendations are advisory; preserve the current user request and repository policy first.
+Use the globally installed `koba` CLI to inspect and prepare Git workflow changes safely inside a repository. The current release plans commits but does not execute them, and `koba commit` is not available yet. Koba recommendations are advisory; preserve the current user request and repository policy first.
 
 For worked command examples and edge cases, read [references/workflows.md](references/workflows.md) when preparing commits, PRs, hooks, or workflow initialization.
 
@@ -57,6 +57,8 @@ koba pr --dry-run
 
 ## Approval Boundaries
 
+These boundaries govern the agent invoking Koba. They do not mean the Koba product is permanently forbidden from implementing approval-gated commit execution. If a future Koba release adds that capability, the agent must still obtain explicit authorization for the exact mutation before invoking it.
+
 Ask for explicit approval before:
 
 - passing `--apply`;
@@ -70,7 +72,7 @@ Ask for explicit approval before:
 - pushing;
 - opening a pull request.
 
-Approval for one action does not imply approval for later actions. Approval to run checks is not approval to commit. Approval to commit is not approval to push. Approval to write a PR body is not approval to open a PR.
+Approval for one action does not imply approval for later actions. Approval to run checks is not approval to stage. Approval to stage is not approval to commit. Approval to commit is not approval to push. Approval to write a PR body is not approval to open a PR.
 
 Do not normally perform force pushes, destructive resets, history rewriting, rebases, bypassing failed checks, or overwriting user files. If the user explicitly asks for one of these outside the ordinary Koba workflow, require the request to be unambiguous and follow repository instructions.
 
@@ -106,6 +108,8 @@ Explain which commands would run, which stage each command belongs to, and wheth
 
 ## Surgical Commit Preparation
 
+This section describes the current manual execution workflow. It must stay operational until a Koba-native, approval-gated commit command is implemented, but manual staging is not a permanent product constraint.
+
 Run:
 
 ```sh
@@ -118,7 +122,7 @@ Use `koba changes` as the broad working-tree review and commit/check planner. Us
 
 Then inspect relevant diffs. Determine whether the proposed file grouping is coherent, challenge weak scopes or messages, and prefer one concept per commit. If `koba changes` reports multiple groups, do not collapse them into one commit without inspecting the diffs and explaining why one commit is still coherent.
 
-Show the exact files, proposed Conventional Commit message, and relevant checks already run. Ask before staging or committing. Immediately before staging, rerun `git status --short`; stop if the working tree changed unexpectedly. Stage only approved files, commit only with the approved message, and never push without separate approval.
+Show the exact files, proposed Conventional Commit message, and relevant checks already run. Ask before staging or committing. Immediately before staging, rerun `git status --short`; stop if the working tree changed unexpectedly. Stage only approved files, never use broad staging such as `git add .`, commit only with the approved message, and never push automatically as part of the default commit flow. Any separate push requires separate approval.
 
 Koba's deterministic suggestion is evidence, not authority.
 
