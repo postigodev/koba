@@ -11,16 +11,20 @@ Koba is a Rust workspace with one CLI crate at `crates/koba`. Keep this single-c
 │   └── koba/
 │       ├── Cargo.toml
 │       ├── src/
+│       │   ├── analysis.rs
+│       │   ├── changes.rs
 │       │   ├── cli.rs
 │       │   ├── commands.rs
 │       │   ├── config.rs
 │       │   ├── doctor.rs
 │       │   ├── executor.rs
 │       │   ├── git.rs
+│       │   ├── git_status.rs
 │       │   ├── github.rs
 │       │   ├── hooks.rs
 │       │   ├── init.rs
 │       │   ├── output.rs
+│       │   ├── path_classification.rs
 │       │   ├── pr.rs
 │       │   ├── repo.rs
 │       │   ├── run_checks.rs
@@ -40,6 +44,10 @@ Koba is a Rust workspace with one CLI crate at `crates/koba`. Keep this single-c
 - `cli`: `clap` command definitions and top-level dispatch.
 - `commands`: thin user-command handlers that pass current directory/options into modules.
 - `git`: narrow shell-out helpers for Git discovery, status, and simple branch/commit lookup.
+- `git_status`: structured parsing of Git working-tree status.
+- `path_classification`: shared path-to-change-concept classification.
+- `analysis`: current deterministic working-tree analysis, commit grouping, message heuristics, checks, and risk assessment.
+- `changes`: read-only rendering of working-tree analysis and recommended commit plans.
 - `repo`: file-tree discovery for workflow files, hooks, and `.github/` assets.
 - `scan`: read-only workflow overview rendering.
 - `doctor`: structured diagnostics and recommendations from scan data.
@@ -63,6 +71,26 @@ Koba is a Rust workspace with one CLI crate at `crates/koba`. Keep this single-c
 - Keep `commands.rs` thin so behavior is testable in modules.
 - Keep config parsing minimal and forward-compatible with unknown fields.
 
+## Intended Commit-First Architecture
+
+The current modules have not yet been refactored into these final boundaries. The intended conceptual flow is:
+
+```text
+deterministic analysis / planning
+    ↓
+commit description generation
+    ↓
+preview / approval / execution
+```
+
+- Analysis owns Git-state inspection, coherent grouping, relevant checks, risks, and mutation-safety constraints.
+- Description generation consumes an existing plan. Multiple generators may exist later, but none may select files, decide safety, or infer approval.
+- Preview and approval expose the exact paths, final message, checks, and proposed mutation.
+- Execution may eventually stage only the approved paths and create only the approved commit.
+- Push is outside the default commit flow and must never happen automatically.
+
+Today, `analysis::CommitPlan` still contains deterministic/path-driven message prose, and `suggest_commit` renders manual Git commands. Separating those responsibilities and adding approval-gated execution are roadmap work, not implemented modules.
+
 ## Safety Model
 
 Koba separates read, preview, and write behavior.
@@ -71,7 +99,10 @@ Koba separates read, preview, and write behavior.
 - `init`, `hooks install`, `github template pr`, and `pr` preview by default.
 - `--apply` writes only the documented target file(s).
 - Existing files are not overwritten.
-- Koba does not commit, push, rewrite history, store GitHub tokens, call GitHub APIs, or open PRs.
+- The current release does not create commits or push.
+- Future commit execution must show the exact plan, require explicit approval, and limit mutation to that approved plan.
+- The default commit flow must not use broad staging such as `git add .` or push automatically.
+- Koba must not silently rewrite history. The current release also does not store GitHub tokens, call GitHub APIs, or open PRs.
 
 ## Testing Strategy
 

@@ -6,8 +6,8 @@ use crate::{commands, github::GithubCommand, hooks::HooksCommand, run_checks::St
 #[command(
     name = "koba",
     version,
-    about = "Local-first Git workflow configurator",
-    long_about = "Koba scans and configures repository workflow infrastructure such as commit conventions, hooks, CI checks, PR templates, and repo hygiene."
+    about = "Local-first commit planning and workflow tooling",
+    long_about = "Koba analyzes working-tree changes into coherent commit plans and supports local checks, hooks, PR templates, and repository workflow diagnostics."
 )]
 struct Cli {
     #[command(subcommand)]

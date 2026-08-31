@@ -4,7 +4,7 @@ The Koba Agent Skill teaches coding agents how to use the globally installed `ko
 
 ## Relationship To Other Agent Files
 
-- Koba CLI: the local executable that scans repositories, previews workflow files, runs configured checks, and drafts commit or PR text.
+- Koba CLI: the local executable that currently analyzes working trees, scans repositories, previews workflow files, runs configured checks, and drafts commit or PR text.
 - Koba Agent Skill: portable agent instructions in `skills/koba/` for using the CLI safely.
 - `AGENTS.md` / `CLAUDE.md`: repository-specific instructions. These take precedence over Koba recommendations.
 - Future MCP server: possible later integration surface. This skill does not add MCP behavior.
@@ -86,6 +86,8 @@ Prepare a surgical commit using Koba, but do not stage or commit until I approve
 
 ## Approval Boundaries
 
+These are agent permissions, not a permanent restriction on what the Koba product may implement. An agent must have explicit authorization for each write or Git mutation it invokes, even when the tool itself includes an interactive approval step.
+
 The skill allows read-oriented and preview-only Koba commands without extra approval:
 
 ```sh
@@ -104,9 +106,11 @@ koba pr --dry-run
 
 Agents must ask before `--apply`, non-dry-run configured checks, staging, committing, pushing, opening pull requests, or writing `koba.yml`, hooks, `.github/` files, or `.koba/pr-body.md`.
 
-Approval for one action does not imply approval for later actions.
+Approval for one action does not imply approval for later actions. In particular, approval to validate is not approval to stage, approval to stage is not approval to commit, and approval to commit is not approval to push.
 
-## Recommended Agent Workflow
+## Current Recommended Agent Workflow
+
+The following manual execution workflow reflects the current CLI. It is not a permanent architecture constraint.
 
 For current working-tree review, commit preparation, or checking whether changes are coherent, start with:
 
@@ -128,6 +132,10 @@ koba run pre-push --dry-run
 ```
 
 Running non-dry-run checks still requires explicit user approval unless the user already requested validation.
+
+After inspecting the exact approved files and message, an authorized agent currently uses scoped manual commands such as `git add -- <approved-files>` and `git commit -m <approved-message>`. It must never substitute broad staging such as `git add .`.
+
+The planned Koba-native commit flow may replace these manual execution steps after it is implemented. Agents using that future flow must still obtain explicit authorization for the exact staging and commit action, must not treat Koba's proposal as user approval, and must never push automatically as part of the default commit workflow. Do not invoke or document `koba commit` as available today.
 
 ## Troubleshooting
 

@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  Local-first Git workflow configuration for real repositories.
+  Local-first commit planning for real repositories.
 </p>
 
 <p align="center">
@@ -16,12 +16,14 @@
 
 # Koba
 
-Koba is a local-first Git workflow configurator for real repositories. It helps you inspect workflow infrastructure, draft a repo workflow contract, run configured checks, connect hooks, generate PR templates, and prepare commit/PR text without taking over Git.
+> **Koba turns a messy working tree into clean commits.**
 
-Koba is built around a simple safety model: read first, recommend next, preview writes, and apply only when explicitly requested.
+Koba currently analyzes working trees, proposes coherent commit groups, recommends relevant checks, and suggests deterministic/path-driven Conventional Commit messages. Workflow inspection, configured checks, hooks, templates, and PR drafting remain useful supporting capabilities.
 
 > [!IMPORTANT]
-> Koba does not commit, push, rebase, rewrite history, store GitHub tokens, call GitHub APIs, or open pull requests. It shells out to local tools such as `git` and your configured check commands.
+> The current release does not create commits yet; commit execution remains manual, and `koba commit` is not an available command. The commit-first direction permits future scoped staging and commit creation only after an exact preview and explicit user approval. The default commit flow will never push automatically or use broad staging such as `git add .`.
+
+Koba is local-first. Deterministic code owns grouping, checks, risk, and mutation safety. Optional future AI may help describe an existing commit plan, but it will not decide grouping, mutation, or approval.
 
 ## What Koba Can Do Today
 
@@ -34,6 +36,8 @@ Koba is built around a simple safety model: read first, recommend next, preview 
 - Review working-tree changes and plan surgical commits.
 - Suggest Conventional Commit messages and safe Git commands.
 - Draft a local PR title/body without opening a PR.
+
+The planned primary flow is analysis -> commit groups -> descriptions -> preview -> checks -> explicit approval -> scoped staging and commit creation. That execution flow is roadmap work; the commands below document the current release.
 
 ## Install
 
@@ -53,7 +57,7 @@ scoop update koba
 scoop uninstall koba
 ```
 
-You can also download prebuilt binaries from GitHub Releases once releases are available.
+You can also download prebuilt binaries from [GitHub Releases](https://github.com/postigodev/koba/releases).
 
 For local development, install the CLI from this workspace:
 
@@ -156,4 +160,4 @@ cargo test -p koba
 git diff --check
 ```
 
-Koba is intentionally conservative. When adding new behavior, prefer structured results, preview/apply flows, and tests that use temporary repositories instead of mutating the real workspace.
+Koba is intentionally conservative. When adding new behavior, prefer structured results, exact previews, explicit approval, scoped mutation, and tests that use temporary repositories instead of mutating the real workspace. Never add automatic push to the default commit flow.
